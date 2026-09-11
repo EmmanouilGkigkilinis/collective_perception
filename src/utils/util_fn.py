@@ -1,4 +1,4 @@
-import pypcd
+from pypcd import pypcd 
 import mmcv
 import numpy as np 
 

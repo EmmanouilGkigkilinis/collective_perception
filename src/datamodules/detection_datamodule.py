@@ -33,32 +33,29 @@ class DAIRV2X_DATASET(Dataset):
                  data_path_veh_lid:str,
                  path_to_data_info:str,
                  path_to_gt_labels:str,
+                 path_to_veh_calib:str
                  ):
         """
         data_path_veh_camera = DAIRV2X-C vehicle-side images 
         data_path_veh_lidar = DAIRV2X-C vehicle-side lidar
-
+        path_to_data_info:str,=data_info.json, frame-label correspondsance
+        path_to_gt_labels:str,  = label information (bbox) 
+        path_to_veh_calib:str = calibration for vehicle frame (intrinsic, extrinsics)
+        
         Read dataset for vehicle only detection
         """
         super().__init__()
-        self.path_to_data_info=Path(path_to_data_info)
+        #------ 
+        self.path_to_data_info=Path(path_to_data_info) #data anotations/metadata
         self.path_to_gt_labels=Path(path_to_gt_labels)
+        self.path_to_veh_calib=Path(path_to_veh_calib)
 
-
-        images_list=[]
-        pcd_list=[]
-        self.data_path_veh_cam = Path(data_path_veh_cam)
+        #---
+        self.data_path_veh_cam = Path(data_path_veh_cam) #data paths 
         self.data_path_veh_lid = Path(data_path_veh_lid)
 
-        # for image in data_path_veh_cam.rglob("*.jpg"):
-        #     images_list.append(image)
-
-        # for pcd in data_path_veh_lid.rglob("*.pcd"):
-        #     pcd_list.append(pcd)
-
-        # self.database = images_list
-        # self.database_pcd = pcd_list
-
+      
+        #-----
         self.database = self.get_veh_cam_lid_frame_id(split , desc)  #construct database list from data_info of DAIRV2X 
 
 
@@ -66,10 +63,44 @@ class DAIRV2X_DATASET(Dataset):
         return len(self.X)
 
     def __getitem__(self, idx):
-        
-
+        """
+        fetcher
+        """
         return self.database[idx]
     
+    def parse_calibration_files(self, frame_idx):
+        """
+        read vehicle calibration instrinsics and extrinsics 
+        """
+
+        #instrinics
+        with open(self.path_to_veh_calib / "camera_intrinsic" /frame_idx+"json","r") as f:
+            data=json.load(f)
+        d=data["cam_D"] #distortion
+        k=data["cam_K"] #camera coeffs
+
+        #extrinsics 
+        data=[]
+        with open(self.path_to_veh_calib / "lidar_to_camera" /frame_idx+"json","r") as f:
+            data=json.load(f)
+
+        t_l_c = data["translation"]
+        r_l_c = data["rotation"]
+
+        with open(self.path_to_veh_calib / "lidar_to_novatel" /frame_idx+"json","r") as f:
+            data=json.load(f)
+
+        t_l_n = data["translation"]
+        r_l_n = data["rotation"]
+
+        with open(self.path_to_veh_calib / "lidar_to_novatel" /frame_idx+"json","r") as f:
+            data=json.load(f)
+
+        t_n_w = data["translation"]
+        r_n_w = data["rotation"]
+
+
+
     def parse_camera_label(self,label_camera):
         """
         parse object detection ground truth for vehicle camera, at one timestamp
@@ -84,7 +115,6 @@ class DAIRV2X_DATASET(Dataset):
         ground_truth_data=[]
         for obj_dict in ground_truth_file:
             ground_truth_data.append(obj_dict["2d_box"])
-
 
         return ground_truth_data
     
@@ -159,6 +189,7 @@ class DAIRV2XDataModule(pl.LightningDataModule):
         path_to_data_info:str,
         path_to_gt_labels:str,
         path_to_data_splits:str,
+        path_to_veh_calib:str,
         batch_size=128,
         num_workers=4,
         pin_memory=True,
@@ -180,7 +211,8 @@ class DAIRV2XDataModule(pl.LightningDataModule):
         self.path_to_data_info=path_to_data_info    #data (paths,labels) info
         self.path_to_gt_labels=path_to_gt_labels    #gt info
         self.path_to_data_splits=path_to_data_splits #train-val-test splits info
-
+        self.path_to_veh_calib= path_to_veh_calib
+        #splitting
         self.train_splits,self.val_splits,self.test_splits = self.parse_data_splits(self.path_to_data_splits) #get splits
 
     def parse_data_splits(self,path_to_data_splits):
@@ -209,6 +241,7 @@ class DAIRV2XDataModule(pl.LightningDataModule):
                 data_path_veh_lid=self.data_path_veh_lid,
                 path_to_data_info=self.path_to_data_info,
                 path_to_gt_labels=self.path_to_gt_labels,
+                path_to_veh_calib=self.path_to_veh_calib,
                 desc="train",
             )
 
@@ -218,6 +251,7 @@ class DAIRV2XDataModule(pl.LightningDataModule):
                 data_path_veh_lid=self.data_path_veh_lid,
                 path_to_data_info=self.path_to_data_info,
                 path_to_gt_labels=self.path_to_gt_labels,
+                path_to_veh_calib=self.path_to_veh_calib,
                 desc="val",
             )
 
@@ -261,7 +295,11 @@ class DAIRV2XDataModule(pl.LightningDataModule):
         )
     
     def bevfusion_collate_fn(batch):
-
+            """
+            simple dict based collator
+            
+            TODO handle pcd? 
+            """
             images = torch.stack(
                 [sample["image"] for sample in batch]
             )

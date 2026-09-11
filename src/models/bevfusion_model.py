@@ -3,7 +3,9 @@ import torch.nn as nn
 import pytorch_lightning as pl
 from src.utils.architecture.bevfusion import BEVFusionV2X
 from src.utils.util_fn import read_jpg, read_pcd
+import logging
 
+logging.getLogger(__file__)
 
 class BEVFusionLightningModule(pl.LightningModule):
     def __init__(
@@ -20,12 +22,16 @@ class BEVFusionLightningModule(pl.LightningModule):
 
         self.save_hyperparameters(ignore=["model"])
 
-
+    def on_train_epoch_start(self):
+            print(f"\nEpoch {self.current_epoch + 1}/{self.trainer.max_epochs}")
+            logging.info(f"\nEpoch {self.current_epoch + 1}/{self.trainer.max_epochs}")
+            
   
     def training_step(self, batch, batch_idx):
         """
         training step batch
         """
+        logging.info("Forward pass ")
         img = batch["image"]  #fix this for batches ... 
         lid = batch["points"]
 
@@ -94,6 +100,17 @@ class BEVFusionLightningModule(pl.LightningModule):
 
         return outputs
 
+    def training_epoch_end(self, outputs):
+        print(f"\nEpoch {self.current_epoch} train metrics:")
+        for k, v in self.trainer.callback_metrics.items():
+            if "train" in k:
+                print(f"{k}: {float(v):.6f}")
+
+        optimizer = self.trainer.optimizers[0]
+        current_lr = optimizer.param_groups[0]["lr"]
+
+        self.log("lr_epoch", current_lr, prog_bar=True, logger=True)
+
 
     def test_step(self, batch, batch_idx):
 
@@ -145,3 +162,5 @@ class BEVFusionLightningModule(pl.LightningModule):
             return len(batch["points"])
 
         return 1
+    
+

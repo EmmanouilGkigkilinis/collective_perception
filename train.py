@@ -51,7 +51,7 @@ def main(cfg:DictConfig):
 
     datamodule = instantiate(cfg.data)
                   
-    model = instantiate(cfg.model)  
+    model = instantiate(cfg.model)   
 
     success = datamodule.setup(stage="fit")
 
