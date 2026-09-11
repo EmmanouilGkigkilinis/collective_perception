@@ -1,3 +1,7 @@
+from src.utils.architecture.encoders import ConvBNReLU
+import torch.nn as nn
+
+
 class BEVFusionNeck(nn.Module):
     def __init__(self, cam_channels=64, lidar_channels=64, out_channels=128):
         super().__init__()

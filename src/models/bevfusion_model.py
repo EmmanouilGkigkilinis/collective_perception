@@ -1,18 +1,19 @@
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
+from src.utils.architecture.bevfusion import BEVFusionV2X
+from src.utils.util_fn import read_jpg, read_pcd
 
 
 class BEVFusionLightningModule(pl.LightningModule):
     def __init__(
         self,
-        model: nn.Module,
         lr=1e-4,
         weight_decay=1e-4,
     ):
         super().__init__()
 
-        self.model = model
+        self.model = BEVFusionV2X()
 
         self.lr = lr
         self.weight_decay = weight_decay
@@ -20,27 +21,18 @@ class BEVFusionLightningModule(pl.LightningModule):
         self.save_hyperparameters(ignore=["model"])
 
 
-    def forward(self, batch):
-        """
-        Inference forward pass.
-
-        batch can contain for example:
-            batch["image"]
-            batch["points"]
-            batch["camera_intrinsics"]
-            batch["camera_extrinsics"]
-            batch["lidar_extrinsics"]
-            batch["gt_boxes"]
-            batch["gt_labels"]
-        """
-        return self.model(batch)
-
-
+  
     def training_step(self, batch, batch_idx):
+        """
+        training step batch
+        """
+        img = batch["image"]  #fix this for batches ... 
+        lid = batch["points"]
+
+        targets = batch["gt_boxes"]
 
         outputs = self.model(
-            batch,
-            return_loss=True,
+            img, lid
         )
 
         # Example:
@@ -50,7 +42,7 @@ class BEVFusionLightningModule(pl.LightningModule):
         #     "loss_heatmap": ...
         # }
 
-        loss = sum(outputs.values())
+        loss = loss_fn(outputs, targets)
 
         self.log(
             "train_loss",

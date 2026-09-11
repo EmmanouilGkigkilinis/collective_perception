@@ -1,0 +1,15 @@
+_target_: src.datamodules.detection_datamodule.DAIRV2XDataModule
+
+
+#vehicle-side
+data_path_veh_cam: /mnt/d/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/vehicle-side/image/cooperative-vehicle-infrastructure-vehicle-side-image
+data_path_veh_lid: /mnt/d/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/vehicle-side/velodyne/
+path_to_data_info: /mnt/d/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/vehicle-side/data_info.json
+path_to_gt_labels: /mnt/d/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/vehicle-side/
+path_to_data_splits: /mnt/e/dev/hidden/projects/detection_dairv2x/src/utils/cooperative-split-data.json
+path_to_veh_calib: /mnt/d/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/vehicle-side/calib/
+
+
+batch_size: ${batch_size},
+num_workers: 4,
+pin_memory: True,

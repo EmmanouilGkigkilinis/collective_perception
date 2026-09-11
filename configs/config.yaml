@@ -1,0 +1,11 @@
+defaults:
+  - model: detection_model
+  - data: dairv2x_detection
+  - trainer: default
+  - logger: tensorboard
+
+
+experiment_name: simple_transformer_hivt_preprocessing
+batch_size: 128
+modelcheckpoint_monitor: 
+seed: 42

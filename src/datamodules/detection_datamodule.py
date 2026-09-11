@@ -7,6 +7,7 @@ import pytorch_lightning as pl
 import logging
 from pathlib import Path
 import pandas as pd
+from os import path as osp
 
 from pathlib import Path
 
@@ -15,12 +16,19 @@ from torch.utils.data import Dataset, DataLoader
 import pytorch_lightning as pl
 
 
+import logging
+
+from src.utils.util_fn import read_jpg, read_pcd
+logging.getLogger(__file__)
+
 class DAIRV2X_DATASET(Dataset):
     """
     Dataset for detection in DAIRV2XC,currently for veh-side cam+lid detection
     Interface with DAIRV2XDataModule
     """
     def __init__(self, 
+                 split:list,
+                 desc:str,
                  data_path_veh_cam:str,
                  data_path_veh_lid:str,
                  path_to_data_info:str,
@@ -39,8 +47,8 @@ class DAIRV2X_DATASET(Dataset):
 
         images_list=[]
         pcd_list=[]
-        data_path_veh_cam = Path(data_path_veh_cam)
-        data_path_veh_lid = Path(data_path_veh_lid)
+        self.data_path_veh_cam = Path(data_path_veh_cam)
+        self.data_path_veh_lid = Path(data_path_veh_lid)
 
         # for image in data_path_veh_cam.rglob("*.jpg"):
         #     images_list.append(image)
@@ -51,34 +59,94 @@ class DAIRV2X_DATASET(Dataset):
         # self.database = images_list
         # self.database_pcd = pcd_list
 
-        self.database = self.get_veh_cam_lid_frame_id()  #construct database list from data_info of DAIRV2X 
+        self.database = self.get_veh_cam_lid_frame_id(split , desc)  #construct database list from data_info of DAIRV2X 
+
 
     def __len__(self):
         return len(self.X)
 
     def __getitem__(self, idx):
-        x = self.X[idx]   # [Tin, 2]
-        y = self.Y[idx]   # [Tout, 2]
+        
 
-        return x, y
+        return self.database[idx]
+    
+    def parse_camera_label(self,label_camera):
+        """
+        parse object detection ground truth for vehicle camera, at one timestamp
+        Read Labels file that contains all labels seen by vehilce at current timestamp 
+        accorind to data_info.json and append it to output 
 
-    def get_veh_cam_lid_frame_id(self, ):
+        returns 
+        ground_truth_data: list of 2d_bboxes at current timestamp
+        """
+        with open(osp.join(self.path_to_gt_labels , label_camera), "r") as f:
+            ground_truth_file=json.load(f)
+        ground_truth_data=[]
+        for obj_dict in ground_truth_file:
+            ground_truth_data.append(obj_dict["2d_box"])
+
+
+        return ground_truth_data
+    
+    def get_veh_cam_lid_frame_id(self, split:list , split_desc:str):
         """ 
         generator for getting sequential dairv2x cam/lid corresponding inputs from data_info.json
         
-        constructor for the detection database
+        constructor for the detection database. Data_info reports sequentialy all frames and
+        associated labels, pcd files at each teimestamp. Cross check with labels files to find labels
+        of that frame.
+
+        inputs
+            split: list of frames to be used by current split
+        
+        Returns
+        database: dict of inputs,ground truth imgs, pcd files , bboxes respectively
         """
-        data = json.load(self.path_to_data_info)
+        with open(self.path_to_data_info, "r") as f:
+            data = json.load(f)
         database = [] 
         for elem in data:
-            label_camera = elem["label_camera_std_path"]
-            label_lidar = elem["label_lidar_std_path"]
-            img_path = elem["image_path"]
-            lidar_path = elem["pointcloud_path"]
+            frame_idx = elem["image_path"].split("/")[-1].replace(".jpg", "")
 
-            database.append((label_camera,label_lidar , img_path , lidar_path))
+            if frame_idx not in split:
+                continue   #keep only frame idx in current split
+
+            label_camera = elem["label_camera_std_path"]    
+            label_lidar = elem["label_lidar_std_path"]
+            img_path = self.data_path_veh_cam / elem["image_path"]                  #paths
+            lidar_path = self.data_path_veh_lid / elem["pointcloud_path"]
+
+            ground_truth_veh_cam = self.parse_camera_label(label_camera)   #ground truth labels(2dbbox)
+
+            # ------------------------
+            # Camera                |
+            # ------------------------
+            img = read_jpg(img_path)
+            # numpy: [H, W, 3], uint8, BGR
+            img = torch.from_numpy(img).permute(2,0,1).float() # [3, H, W]
+
+            # ------------------------
+            # LiDAR                 |
+            # ------------------------
+            points = read_pcd(lidar_path)
+            points = torch.from_numpy(points).float()
+            # [N, 4]
+
+            # ------------------------
+            # GT
+            # ------------------------
+
+
+            database.append({                               #training sample 
+                             "img":img , 
+                             "points":points , 
+                             "ground_truth_veh_cam":ground_truth_veh_cam  #2d bbox
+                                                                         })  
+            
+        logging.info("Loaded {} data for current {} split".format(len(database[img])))
 
         return database
+
 
 class DAIRV2XDataModule(pl.LightningDataModule):
     """
@@ -86,18 +154,17 @@ class DAIRV2XDataModule(pl.LightningDataModule):
     """
     def __init__(
         self,
-        train_file,
-        val_file,
-        test_file,
+        data_path_veh_cam:str,
+        data_path_veh_lid:str,
+        path_to_data_info:str,
+        path_to_gt_labels:str,
+        path_to_data_splits:str,
         batch_size=128,
         num_workers=4,
         pin_memory=True,
     ):
         super().__init__()
 
-        self.train_file = train_file
-        self.val_file = val_file
-        self.test_file = test_file
 
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -107,17 +174,54 @@ class DAIRV2XDataModule(pl.LightningDataModule):
         self.val_dataset = None
         self.test_dataset = None
 
-    def setup(self, stage=None):
+        #requirements
+        self.data_path_veh_cam=data_path_veh_cam    #input paths
+        self.data_path_veh_lid=data_path_veh_lid
+        self.path_to_data_info=path_to_data_info    #data (paths,labels) info
+        self.path_to_gt_labels=path_to_gt_labels    #gt info
+        self.path_to_data_splits=path_to_data_splits #train-val-test splits info
 
+        self.train_splits,self.val_splits,self.test_splits = self.parse_data_splits(self.path_to_data_splits) #get splits
+
+    def parse_data_splits(self,path_to_data_splits):
+        """
+        return frame idxs lists as splits 
+        """
+        with open(path_to_data_splits, "r") as f:
+            splits = json.load(f)["vehicle_split"]
+
+        train_splits = [x for x in splits["train"]]
+        val_splits = [x for x in splits["val"]]
+        test_splits = [x for x in splits["test"]]
+
+        return train_splits,val_splits,test_splits
+
+    def setup(self, stage=None):
+        """
+        setups current training stage. 
+        fit:train and val
+        test: test
+        """
         if stage == "fit" or stage is None:
             self.train_dataset = DAIRV2X_DATASET(
-                self.train_file
+                split=self.train_splits, 
+                data_path_veh_cam=self.data_path_veh_cam,
+                data_path_veh_lid=self.data_path_veh_lid,
+                path_to_data_info=self.path_to_data_info,
+                path_to_gt_labels=self.path_to_gt_labels,
+                desc="train",
             )
 
             self.val_dataset = DAIRV2X_DATASET(
-                self.val_file
+                split=self.val_splits, 
+                data_path_veh_cam=self.data_path_veh_cam,
+                data_path_veh_lid=self.data_path_veh_lid,
+                path_to_data_info=self.path_to_data_info,
+                path_to_gt_labels=self.path_to_gt_labels,
+                desc="val",
             )
 
+        #testing
         if stage == "test" or stage is None:
             self.test_dataset = DAIRV2X_DATASET(
                 self.test_file
@@ -131,6 +235,7 @@ class DAIRV2XDataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             persistent_workers=self.num_workers > 0,
+            collate_fn=self.bevfusion_collate_fn,
         )
 
     def val_dataloader(self):
@@ -141,6 +246,7 @@ class DAIRV2XDataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             persistent_workers=self.num_workers > 0,
+            collate_fn=self.bevfusion_collate_fn,
         )
 
     def test_dataloader(self):
@@ -151,4 +257,38 @@ class DAIRV2XDataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             persistent_workers=self.num_workers > 0,
+            collate_fn=self.bevfusion_collate_fn,
         )
+    
+    def bevfusion_collate_fn(batch):
+
+            images = torch.stack(
+                [sample["image"] for sample in batch]
+            )
+
+            points = [
+                sample["points"]
+                for sample in batch
+            ]
+
+            gt_boxes = [
+                sample["ground_truth_veh_cam"]
+                for sample in batch
+            ]
+
+           
+            return {
+                "image": images,          # [B, 3, H, W]
+
+                # lists because number differs per sample
+                "points": points,        # list of [Ni, 4]
+                "gt_boxes": gt_boxes,    # list of [Mi, box_dim]
+
+                # "camera_intrinsics": torch.stack(
+                #     [sample["camera_intrinsics"] for sample in batch]
+                # ),
+
+                # "camera_extrinsics": torch.stack(
+                #     [sample["camera_extrinsics"] for sample in batch]
+                # ),
+            }
