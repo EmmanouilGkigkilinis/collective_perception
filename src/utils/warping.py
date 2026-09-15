@@ -1,4 +1,6 @@
 import torch
+from src.utils.veh_to_infra import transform_vehicle_grid_to_infra
+import torch.functional as F
 
 def make_grid_cells(xbound, ybound, device=None, dtype=torch.float32):
     """
@@ -24,24 +26,68 @@ def make_grid_cells(xbound, ybound, device=None, dtype=torch.float32):
 
     return grid
 
-class BEVWarp(nn.Module):
+def metric_to_grid_sample_coords(
+    grid_metric,
+    xbound,
+    ybound,
+):
+    """
+    Convert metric BEV coordinates into grid_sample coordinates [-1, 1].
 
-    def forward(self, feat, T):
+    Args:
+        grid_metric: [H, W, 2]
 
-        B,C,H,W = feat.shape
+    Returns:
+        grid: [H, W, 2]
 
-        grid = build_metric_grid(H,W)
+    grid[..., 0] -> horizontal/W coordinate
+    grid[..., 1] -> vertical/H coordinate
+    """
 
-        grid = transform_grid(grid,T)
+    xmin, xmax, xstep = xbound
+    ymin, ymax, ystep = ybound
 
-        grid = normalize_grid(grid,H,W)
+    x = grid_metric[..., 0]
+    y = grid_metric[..., 1]
 
-        return F.grid_sample(
-            feat,
-            grid,
-            mode='bilinear',
-            align_corners=True
-        )
+    # Number of cells
+    W = int(round((xmax - xmin) / xstep))
+    H = int(round((ymax - ymin) / ystep))
+
+    # Metric position -> pixel index corresponding to cell centers
+    ix = (x - (xmin + xstep / 2)) / xstep
+    iy = (y - (ymin + ystep / 2)) / ystep
+
+    # Because align_corners=True:
+    # pixel 0     -> -1
+    # pixel W - 1 -> +1
+
+    gx = 2.0 * ix / (W - 1) - 1.0
+    gy = 2.0 * iy / (H - 1) - 1.0
+
+    return torch.stack(
+        [gx, gy],
+        dim=-1,
+    )
+
+# class BEVWarp(nn.Module):
+
+#     def forward(self, feat, T):
+
+#         B,C,H,W = feat.shape
+
+#         grid = build_metric_grid(H,W)
+
+#         grid = transform_grid(grid,T)
+
+#         grid = normalize_grid(grid,H,W)
+
+#         return F.grid_sample(
+#             feat,
+#             grid,
+#             mode='bilinear',
+#             align_corners=True
+#         )
     
 def warp_infra_bev_to_vehicle(
     infra_bev,

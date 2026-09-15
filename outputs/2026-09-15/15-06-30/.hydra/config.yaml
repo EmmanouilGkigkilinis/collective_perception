@@ -1,0 +1,55 @@
+model:
+  _target_: src.models.bevfusion_model.BEVFusionLightningModule
+  _recursive_: false
+  in_channels: 64
+  out_channels: 64
+  image_size:
+  - 1080
+  - 1920
+  feature_size:
+  - 135
+  - 240
+  xbound:
+  - -50.0
+  - 50.0
+  - 0.5
+  ybound:
+  - -50.0
+  - 50.0
+  - 0.5
+  zbound:
+  - -10.0
+  - 10.0
+  - 20.0
+  dbound:
+  - 1.0
+  - 60.0
+  - 0.5
+  downsample: 1
+data:
+  _target_: src.datamodules.detection_datamodule.DAIRV2XDataModule
+  data_path_veh_cam: /mnt/d/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/vehicle-side/
+  data_path_veh_lid: /mnt/d/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/vehicle-side/
+  path_to_data_info: /mnt/d/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/vehicle-side/data_info.json
+  path_to_gt_labels: /mnt/d/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/vehicle-side/
+  path_to_data_splits: /mnt/e/dev/hidden/projects/detection_dairv2x/src/utils/cooperative-split-data.json
+  path_to_veh_calib: /mnt/d/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/vehicle-side/calib/
+  batch_size: ${batch_size}
+  num_workers: 4
+  pin_memory: true
+trainer:
+  _target_: pytorch_lightning.Trainer
+  max_epochs: 500
+  gpus: 1
+  log_every_n_steps: 1
+  gradient_clip_val: 1.0
+logger:
+  _target_: pytorch_lightning.loggers.TensorBoardLogger
+  save_dir: lightning_logs
+  name: ${experiment_name}
+  version: ${now:%Y-%m-%d_%H-%M-%S}_${experiment_name}
+  default_hp_metric: false
+experiment_name: try2
+batch_size: 24
+modelcheckpoint_monitor: null
+seed: 42

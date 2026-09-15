@@ -17,7 +17,11 @@ class ConvBNReLU(nn.Module):
 
 
 class LSSCameraEncoder(nn.Module):
-    def __init__(self, in_channels=3, bev_channels=64, bev_h=200, bev_w=200):
+    def __init__(self, 
+                 in_channels=3, 
+                 bev_channels=64, 
+                 bev_h=200, 
+                 bev_w=200):
         super().__init__()
         self.bev_h = bev_h
         self.bev_w = bev_w
@@ -40,7 +44,8 @@ class LSSCameraEncoder(nn.Module):
         returns camera_bev: [B, C, bev_h, bev_w]
         """
         x = self.backbone(img)
-        x = F.interpolate(x, size=(self.bev_h, self.bev_w), mode="bilinear", align_corners=False)
+        x = F.interpolate(x, size=(self.bev_h, self.bev_w), 
+                          mode="bilinear", align_corners=False)
         x = self.bev_proj(x)
         return x
     

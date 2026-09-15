@@ -10,17 +10,38 @@ logging.getLogger(__file__)
 class BEVFusionLightningModule(pl.LightningModule):
     def __init__(
         self,
+        in_channels,
+        out_channels,
+        image_size,
+        feature_size,
+        xbound,
+        ybound,
+        zbound,
+        dbound,
+        downsample,
+        calib_path,
         lr=1e-4,
         weight_decay=1e-4,
     ):
         super().__init__()
 
-        self.model = BEVFusionV2X()
+        self.model = BEVFusionV2X(in_channels,
+                                    out_channels,
+                                    image_size,
+                                    feature_size,
+                                    xbound,
+                                    ybound,
+                                    zbound,
+                                    dbound,
+                                    downsample,              
+                                    calib_path)
 
         self.lr = lr
         self.weight_decay = weight_decay
 
         self.save_hyperparameters(ignore=["model"])
+
+        
 
     def on_train_epoch_start(self):
             print(f"\nEpoch {self.current_epoch + 1}/{self.trainer.max_epochs}")
@@ -33,12 +54,12 @@ class BEVFusionLightningModule(pl.LightningModule):
         """
         logging.info("Forward pass ")
         img = batch["image"]  #fix this for batches ... 
-        lid = batch["points"]
-
+        points = batch["points"]
         targets = batch["gt_boxes"]
+        frame_idx = batch["frame_idx"]
 
         outputs = self.model(
-            img, lid
+            img, points ,frame_idx
         )
 
         # Example:
@@ -72,10 +93,17 @@ class BEVFusionLightningModule(pl.LightningModule):
 
 
     def validation_step(self, batch, batch_idx):
+        """
+        validation 
+        """
+        logging.info("Forward validation pass ")
+        img = batch["image"]  #fix this for batches ... 
+        points = batch["points"]
+        targets = batch["gt_boxes"]
+
 
         outputs = self.model(
-            batch,
-            return_loss=True,
+            img,points
         )
 
         loss = sum(outputs.values())
@@ -133,7 +161,7 @@ class BEVFusionLightningModule(pl.LightningModule):
     def configure_optimizers(self):
 
         optimizer = torch.optim.AdamW(
-            self.parameters(),
+            self.model.parameters(),
             lr=self.lr,
             weight_decay=self.weight_decay,
         )

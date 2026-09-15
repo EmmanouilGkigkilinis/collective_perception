@@ -93,19 +93,19 @@ def main(cfg:DictConfig):
 
     # print("Last model path:", checkpoint_callback.last_model_path)
 
-    with open("training_logs/checkpoint_info_{}.log".format(cfg.experiment_name), "a") as f:
-        print("Callbacks:", file=f)
+    # with open("training_logs/checkpoint_info_{}.log".format(cfg.experiment_name), "a") as f:
+    #     print("Callbacks:", file=f)
 
-        for cb in trainer.callbacks:
-            print(
-                type(cb),
-                getattr(cb, "dirpath", None),
-                file=f,
-            )
+    #     for cb in trainer.callbacks:
+    #         print(
+    #             type(cb),
+    #             getattr(cb, "dirpath", None),
+    #             file=f,
+    #         )
 
-        print("Checkpoint dir:", checkpoint_callback.dirpath, file=f)
-        print("Best model path:", checkpoint_callback.best_model_path, file=f)
-        print("Last model path:", checkpoint_callback.last_model_path, file=f) #save callbacks 
+    #     print("Checkpoint dir:", checkpoint_callback.dirpath, file=f)
+    #     print("Best model path:", checkpoint_callback.best_model_path, file=f)
+    #     print("Last model path:", checkpoint_callback.last_model_path, file=f) #save callbacks 
 
     trainer.fit(model = model , 
                 datamodule=datamodule)

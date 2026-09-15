@@ -6,6 +6,6 @@ defaults:
 
 
 experiment_name: simple_transformer_hivt_preprocessing
-batch_size: 128
+batch_size: 5
 modelcheckpoint_monitor: 
 seed: 42

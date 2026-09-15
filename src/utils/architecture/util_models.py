@@ -1,6 +1,7 @@
 from src.utils.architecture.encoders import ConvBNReLU
 import torch.nn as nn
-
+import torch
+from torch import functional as F 
 
 class BEVFusionNeck(nn.Module):
     def __init__(self, cam_channels=64, lidar_channels=64, out_channels=128):
@@ -29,7 +30,15 @@ class BEVFusionNeck(nn.Module):
         return self.fuse(x)
     
 class CenterPointHead(nn.Module):
+    """
+    does detection on the unified BEV features [h,w,c], c feat dimensionality. 
+    Unified means c,l expressed in one coordinate system
+
+    inputs
+    in_channels: input features dimensionality 
+    """
     def __init__(self, in_channels=128, num_classes=3):
+
         super().__init__()
 
         self.shared = nn.Sequential(

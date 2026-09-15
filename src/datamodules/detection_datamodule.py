@@ -14,7 +14,7 @@ from pathlib import Path
 import torch
 from torch.utils.data import Dataset, DataLoader
 import pytorch_lightning as pl
-
+from tqdm import tqdm
 
 import logging
 
@@ -60,13 +60,45 @@ class DAIRV2X_DATASET(Dataset):
 
 
     def __len__(self):
-        return len(self.X)
+        return len(self.database)
 
     def __getitem__(self, idx):
         """
         fetcher
+
+        Reads also the img, pcd from disk one at a time 
         """
-        return self.database[idx]
+
+        sample = self.database[idx]
+        img = sample["img"]
+        points= sample["points"]
+        frame_idx = sample["frame_idx"]
+
+        gt = sample["ground_truth_veh_cam"]
+
+        # ------------------------
+        # Camera                |
+        # ------------------------
+        img = read_jpg(img)
+        # numpy: [H, W, 3], uint8, BGR
+        img = torch.from_numpy(img).permute(2,0,1).float()  # [3, H, W]
+
+        #some info 
+        logging.info("Outputting image shape from dataloader, after reading, and permuting 2,0,1 {}".format(img.shape))
+
+        # ------------------------
+        # LiDAR                 |
+        # ------------------------
+        points = read_pcd(points)
+
+        logging.info("Outputting some points shape information after reading in dataset fetcher {}".format(points.shape))
+
+        points_batch = [torch.from_numpy(x).float() for x in points]
+        # [N, 4]
+
+        return img, points , gt , frame_idx
+
+
     
     def parse_calibration_files(self, frame_idx):
         """
@@ -135,7 +167,7 @@ class DAIRV2X_DATASET(Dataset):
         with open(self.path_to_data_info, "r") as f:
             data = json.load(f)
         database = [] 
-        for elem in data:
+        for elem in tqdm(data , desc=split_desc):
             frame_idx = elem["image_path"].split("/")[-1].replace(".jpg", "")
 
             if frame_idx not in split:
@@ -148,32 +180,20 @@ class DAIRV2X_DATASET(Dataset):
 
             ground_truth_veh_cam = self.parse_camera_label(label_camera)   #ground truth labels(2dbbox)
 
-            # ------------------------
-            # Camera                |
-            # ------------------------
-            img = read_jpg(img_path)
-            # numpy: [H, W, 3], uint8, BGR
-            img = torch.from_numpy(img).permute(2,0,1).float() # [3, H, W]
-
-            # ------------------------
-            # LiDAR                 |
-            # ------------------------
-            points = read_pcd(lidar_path)
-            points = torch.from_numpy(points).float()
-            # [N, 4]
-
+            
             # ------------------------
             # GT
             # ------------------------
 
 
             database.append({                               #training sample 
-                             "img":img , 
-                             "points":points , 
-                             "ground_truth_veh_cam":ground_truth_veh_cam  #2d bbox
+                             "img":img_path , 
+                             "points":lidar_path , 
+                             "ground_truth_veh_cam":ground_truth_veh_cam,  #2d bbox
+                             "frame_idx": frame_idx
                                                                          })  
             
-        logging.info("Loaded {} data for current {} split".format(len(database[img])))
+        logging.info("Loaded {} data for current {} split".format(len(database),split_desc))
 
         return database
 
@@ -268,7 +288,7 @@ class DAIRV2XDataModule(pl.LightningDataModule):
             shuffle=True,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
-            persistent_workers=self.num_workers > 0,
+            persistent_workers=self.num_workers ,
             collate_fn=self.bevfusion_collate_fn,
         )
 
@@ -279,7 +299,7 @@ class DAIRV2XDataModule(pl.LightningDataModule):
             shuffle=False,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
-            persistent_workers=self.num_workers > 0,
+            persistent_workers=self.num_workers,
             collate_fn=self.bevfusion_collate_fn,
         )
 
@@ -294,34 +314,37 @@ class DAIRV2XDataModule(pl.LightningDataModule):
             collate_fn=self.bevfusion_collate_fn,
         )
     
-    def bevfusion_collate_fn(batch):
+    def bevfusion_collate_fn(self, batch):
             """
             simple dict based collator
             
             TODO handle pcd? 
             """
             images = torch.stack(
-                [sample["image"] for sample in batch]
+                [sample[0] for sample in batch]
             )
 
             points = [
-                sample["points"]
+                sample[1]
                 for sample in batch
             ]
 
             gt_boxes = [
-                sample["ground_truth_veh_cam"]
+                sample[2]
                 for sample in batch
             ]
 
-           
+            frame_idx = [sample[3] for sample in batch]
+        
+
+
             return {
                 "image": images,          # [B, 3, H, W]
 
                 # lists because number differs per sample
                 "points": points,        # list of [Ni, 4]
                 "gt_boxes": gt_boxes,    # list of [Mi, box_dim]
-
+                "frame_idx":frame_idx,
                 # "camera_intrinsics": torch.stack(
                 #     [sample["camera_intrinsics"] for sample in batch]
                 # ),

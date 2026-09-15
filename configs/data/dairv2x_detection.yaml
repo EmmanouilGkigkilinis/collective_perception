@@ -9,8 +9,15 @@ path_to_gt_labels: /mnt/d/dev/hidden/data/dairv2x/cooperative-vehicle-infrastruc
 path_to_data_splits: /mnt/e/dev/hidden/projects/detection_dairv2x/src/utils/cooperative-split-data.json
 path_to_veh_calib: /mnt/d/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/vehicle-side/calib/
 
+
+
+
 #infra-side 
 
-batch_size: ${batch_size},
-num_workers: 4,
-pin_memory: True,
+
+#training
+batch_size: ${batch_size}
+num_workers: 1
+pin_memory: False
+
+#validation
