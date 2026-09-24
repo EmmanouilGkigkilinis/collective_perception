@@ -1,7 +1,7 @@
 from typing import Tuple
 
 import torch
-from mmcv.runner import force_fp32
+# from mmcv.runner import force_fp32
 from torch import nn
 
 from src.utils.architecture.lss.bev_pool import bev_pool
@@ -64,7 +64,7 @@ class BaseTransform(nn.Module):
         self.D = self.frustum.shape[0]
         self.fp16_enabled = False
 
-    @force_fp32()
+    # @force_fp32()
     def create_frustum(self):
         iH, iW = self.image_size
         fH, fW = self.feature_size
@@ -90,7 +90,7 @@ class BaseTransform(nn.Module):
         frustum = torch.stack((xs, ys, ds), -1)
         return nn.Parameter(frustum, requires_grad=False)
 
-    @force_fp32()
+    # @force_fp32()
     def get_geometry(
         self,
         camera2lidar_rots,
@@ -139,7 +139,7 @@ class BaseTransform(nn.Module):
     def get_cam_feats(self, x):
         raise NotImplementedError
 
-    @force_fp32()
+    # @force_fp32()
     def bev_pool(self, geom_feats, x):
         B, N, D, H, W, C = x.shape
         Nprime = B * N * D * H * W
@@ -177,22 +177,24 @@ class BaseTransform(nn.Module):
 
         return final
 
-    @force_fp32()
+    # @force_fp32()
     def forward(
         self,
         img,
-        points,
-        radar, 
         camera2ego,
         lidar2ego,
-        lidar2camera,
-        lidar2image,
         camera_intrinsics,
         camera2lidar,
         img_aug_matrix,
         lidar_aug_matrix,
-        **kwargs,
+        points=None,
+        radar=None, 
+        lidar2camera=None,
+        lidar2image=None,
     ):
+        """
+        forward call used by lss 
+        """
         rots = camera2ego[..., :3, :3]
         trans = camera2ego[..., :3, 3]
         intrins = camera_intrinsics[..., :3, :3]
@@ -205,6 +207,8 @@ class BaseTransform(nn.Module):
 
         extra_rots = lidar_aug_matrix[..., :3, :3]
         extra_trans = lidar_aug_matrix[..., :3, 3]
+        
+
 
         geom = self.get_geometry(
             camera2lidar_rots,
@@ -221,9 +225,13 @@ class BaseTransform(nn.Module):
             'bda_mat': lidar_aug_matrix,
             'sensor2ego_mats': camera2ego, 
         }
+
+        img=img.unsqueeze(0)  #add extra N=1 camera dimension
+
         x = self.get_cam_feats(img, mats_dict)
 
         use_depth = False
+
         if type(x) == tuple:
             x, depth = x 
             use_depth = True
@@ -238,7 +246,7 @@ class BaseTransform(nn.Module):
 
 
 class BaseDepthTransform(BaseTransform):
-    @force_fp32()
+    # @force_fp32()
     def forward(
         self,
         img,

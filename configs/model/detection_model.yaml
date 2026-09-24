@@ -12,4 +12,4 @@ zbound: [-10.0, 10.0, 20.0]
 dbound: [1.0, 60.0, 0.5]
 downsample: 1
 
-calib_path: D:\dev\hidden\data\dairv2x\cooperative-vehicle-infrastructure\vehicle-side\calib
+calib_path: /mnt/d/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/vehicle-side/calib/

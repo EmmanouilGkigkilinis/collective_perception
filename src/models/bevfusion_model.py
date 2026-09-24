@@ -58,8 +58,38 @@ class BEVFusionLightningModule(pl.LightningModule):
         targets = batch["gt_boxes"]
         frame_idx = batch["frame_idx"]
 
+
+        #calibration parameters
+        camera2lidar=batch["camera2lidar"]
+        camera2ego=batch["camera2ego"]
+        lidar2ego=batch["lidar2ego"]
+        img_aug_matrix=batch["img_aug_matrix"]
+        lidar_aug_matrix=batch["lidar_aug_matrix"]
+        camera_intrinsics = batch["camera_intrinsics"]
+        # frame_idx = batch["frame_idx"]
+
+        import inspect
+
+        print("\n===== MODEL DEBUG =====")
+        print("model object:", self.model)
+        print("model class:", type(self.model))
+        print("MRO:", type(self.model).__mro__)
+        print("forward:", self.model.forward)
+        print("forward signature:", inspect.signature(self.model.forward))
+        print("class file:", inspect.getfile(type(self.model)))
+        print("forward file:", inspect.getfile(self.model.forward))
+        print("=======================\n")
+
+
         outputs = self.model(
-            img, points ,frame_idx
+            img=img,
+            points=points , 
+            camera_intrinsics = camera_intrinsics,
+            camera2lidar=camera2lidar , 
+            camera2ego=camera2ego, 
+            lidar2ego=lidar2ego, 
+            img_aug_matrix=img_aug_matrix, 
+            lidar_aug_matrix = lidar_aug_matrix
         )
 
         # Example:
@@ -100,10 +130,26 @@ class BEVFusionLightningModule(pl.LightningModule):
         img = batch["image"]  #fix this for batches ... 
         points = batch["points"]
         targets = batch["gt_boxes"]
+        
 
+        #calibration parameters
+        camera_intrinsics = batch["camera_intrinsics"]
+        camera2lidar=batch["camera2lidar"]
+        camera2ego=batch["camera2ego"]
+        lidar2ego=batch["lidar2ego"]
+        img_aug_matrix=batch["img_aug_matrix"]
+        lidar_aug_matrix=batch["lidar_aug_matrix"]
+        # frame_idx = batch["frame_idx"]
 
-        outputs = self.model(
-            img,points
+        outputs = self.model(  #lss model forward
+            img=img,
+            points=points , 
+            camera_intrinsics = camera_intrinsics, 
+            camera2lidar=camera2lidar , 
+            camera2ego=camera2ego, 
+            lidar2ego=lidar2ego, 
+            img_aug_matrix=img_aug_matrix, 
+            lidar_aug_matrix = lidar_aug_matrix
         )
 
         loss = sum(outputs.values())

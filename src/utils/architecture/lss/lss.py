@@ -1,14 +1,8 @@
 from typing import Tuple
-
-from mmcv.runner import force_fp32
+# from mmcv.runner import force_fp32
 from torch import nn
-
+from src.utils.architecture.lss.base import BaseTransform
 # from mmdet3d.models.builder import VTRANSFORMS
-
-from .base import BaseTransform
-
-__all__ = ["LSSTransform"]
-
 
 # @VTRANSFORMS.register_module()
 class LSSTransform(BaseTransform):
@@ -59,9 +53,14 @@ class LSSTransform(BaseTransform):
         else:
             self.downsample = nn.Identity()
 
-    @force_fp32()
-    def get_cam_feats(self, x):
-        B, N, C, fH, fW = x.shape
+    # @force_fp32()
+    def get_cam_feats(self, x, map_dict=None):
+        """
+        map_dict if from previous commit.not required
+        in current functoin
+        """
+        
+        B, N, C, fH, fW = x.shape          
 
         x = x.view(B * N, C, fH, fW)
 
@@ -71,9 +70,21 @@ class LSSTransform(BaseTransform):
 
         x = x.view(B, N, self.C, self.D, fH, fW)
         x = x.permute(0, 1, 3, 4, 5, 2)
-        return x
+        return
+    
+
 
     def forward(self, *args, **kwargs):
-        x = super().forward(*args, **kwargs)
+        
+        import inspect
+
+        print("self type:", type(self))
+        print("MRO:", type(self).__mro__)
+        print("super forward:", super().forward)
+        print("super forward signature:", inspect.signature(super().forward))
+        print("kwargs:", kwargs.keys())
+        
+        x = super().forward(**kwargs)
+
         x = self.downsample(x)
         return x

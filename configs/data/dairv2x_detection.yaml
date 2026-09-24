@@ -10,8 +10,6 @@ path_to_data_splits: /mnt/e/dev/hidden/projects/detection_dairv2x/src/utils/coop
 path_to_veh_calib: /mnt/d/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/vehicle-side/calib/
 
 
-
-
 #infra-side 
 
 
@@ -21,3 +19,8 @@ num_workers: 1
 pin_memory: False
 
 #validation
+
+
+#conf
+test_k: True
+test_k_elem: 100

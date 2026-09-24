@@ -33,7 +33,9 @@ class DAIRV2X_DATASET(Dataset):
                  data_path_veh_lid:str,
                  path_to_data_info:str,
                  path_to_gt_labels:str,
-                 path_to_veh_calib:str
+                 path_to_veh_calib:str,
+                 test_k_elem:int,
+                 test_k:bool
                  ):
         """
         data_path_veh_camera = DAIRV2X-C vehicle-side images 
@@ -45,19 +47,23 @@ class DAIRV2X_DATASET(Dataset):
         Read dataset for vehicle only detection
         """
         super().__init__()
-        #------ 
-        self.path_to_data_info=Path(path_to_data_info) #data anotations/metadata
-        self.path_to_gt_labels=Path(path_to_gt_labels)
-        self.path_to_veh_calib=Path(path_to_veh_calib)
+        #------  metadata,gt,calib
+        self.path_to_data_info = Path(path_to_data_info) #data anotations/metadata
+        self.path_to_gt_labels = Path(path_to_gt_labels)
+        self.path_to_veh_calib = path_to_veh_calib
 
-        #---
+        #--- inputs
         self.data_path_veh_cam = Path(data_path_veh_cam) #data paths 
         self.data_path_veh_lid = Path(data_path_veh_lid)
 
+        #conf
+        self.test_k_elem=test_k_elem
+        self.test_k=test_k
       
-        #-----
+        #-----database
         self.database = self.get_veh_cam_lid_frame_id(split , desc)  #construct database list from data_info of DAIRV2X 
 
+        
 
     def __len__(self):
         return len(self.database)
@@ -83,7 +89,9 @@ class DAIRV2X_DATASET(Dataset):
         # numpy: [H, W, 3], uint8, BGR
         img = torch.from_numpy(img).permute(2,0,1).float()  # [3, H, W]
 
-        #some info 
+        # img=img.unsqueeze(0) #add camera node dimension N=1, required by lss
+
+        #some info  
         logging.info("Outputting image shape from dataloader, after reading, and permuting 2,0,1 {}".format(img.shape))
 
         # ------------------------
@@ -96,40 +104,141 @@ class DAIRV2X_DATASET(Dataset):
         points_batch = [torch.from_numpy(x).float() for x in points]
         # [N, 4]
 
-        return img, points , gt , frame_idx
+        (camera_intrinsics,
+         camera2lidar, 
+         camera2ego, 
+         lidar2ego , 
+         img_aug_matrix, 
+         lidar_aug_matrix)= self.read_calib_path(frame_idx)
+        
+        
+        return (img, 
+                points , 
+                gt , 
+                camera_intrinsics,
+                camera2lidar,
+                camera2ego,
+                lidar2ego,
+                img_aug_matrix,
+                lidar_aug_matrix
+                )
 
+
+    def read_calib_path(self , frame_idx:str):
+        """
+        Read calibration for one timestamp/frame.
+
+        Returns
+        -------
+        camera_intrinsics : [1, 4, 4]
+            Camera intrinsic matrix. First dimension is N=1 camera.
+
+        camera2lidar : [1, 4, 4]
+            Transform from vehicle camera frame -> vehicle LiDAR frame.
+
+        lidar2camera : [1, 4, 4]
+            Transform from vehicle LiDAR frame -> vehicle camera frame.
+
+        cam_D : [num_distortion_coeffs]
+            Distortion coefficients.
+        """
+        
+
+        with open(osp.join(self.path_to_veh_calib,"camera_intrinsic",frame_idx + ".json") , "r") as f:
+            calib = json.load(f) 
+        camera_intinsics = calib["cam_K"]
+
+        K = torch.tensor(
+            camera_intinsics,
+            dtype=torch.float32,
+        ).reshape(3, 3)
+
+        # BEVFusion uses homogeneous 4x4 calibration matrices
+        K4 = torch.eye(4, dtype=torch.float32)
+        K4[:3, :3] = K
+
+        # N = 1 camera
+        camera_intrinsics = K4.unsqueeze(0)
+        # [1,4,4]
+
+        with open(osp.join(self.path_to_veh_calib , "lidar_to_camera", frame_idx + ".json") , "r") as f:
+            calib_ext=json.load(f)
+
+        R_lidar_to_camera = torch.tensor(
+            calib_ext["rotation"],
+            dtype=torch.float32,
+        ).reshape(3, 3)
+
+        t_lidar_to_camera = torch.tensor(
+            calib_ext["translation"],
+            dtype=torch.float32,
+        ).reshape(3)
+        lidar2camera = torch.eye(
+            4,
+            dtype=torch.float32,
+        )
+
+        lidar2camera[:3, :3] = R_lidar_to_camera
+        lidar2camera[:3, 3] = t_lidar_to_camera
+
+        # camera2lidar=[calib["rotation"] , calib["translation"]]
+        camera2lidar = torch.linalg.inv(
+            lidar2camera
+        )
+
+        # Add N=1 camera dimension
+        lidar2camera = lidar2camera.unsqueeze(0)
+        camera2lidar = camera2lidar.unsqueeze(0)
+
+        camera2ego=camera2lidar.clone()
+        lidar2ego=torch.eye(4)
+        img_aug_matrix = torch.eye(
+                4,
+                dtype=torch.float32,
+            )
+        lidar_aug_matrix = torch.eye(
+                4,
+                dtype=torch.float32,
+        )
+
+        return (camera_intrinsics,
+                camera2lidar, 
+               camera2ego, 
+               lidar2ego , 
+               img_aug_matrix,
+               lidar_aug_matrix)
 
     
-    def parse_calibration_files(self, frame_idx):
-        """
-        read vehicle calibration instrinsics and extrinsics 
-        """
+    # def parse_calibration_files(self, frame_idx):
+    #     """
+    #     read vehicle calibration instrinsics and extrinsics 
+    #     """
 
-        #instrinics
-        with open(self.path_to_veh_calib / "camera_intrinsic" /frame_idx+"json","r") as f:
-            data=json.load(f)
-        d=data["cam_D"] #distortion
-        k=data["cam_K"] #camera coeffs
+    #     #instrinics
+    #     with open(self.path_to_veh_calib / "camera_intrinsic" /frame_idx+"json","r") as f:
+    #         data=json.load(f)
+    #     d=data["cam_D"] #distortion
+    #     k=data["cam_K"] #camera coeffs
 
-        #extrinsics 
-        data=[]
-        with open(self.path_to_veh_calib / "lidar_to_camera" /frame_idx+"json","r") as f:
-            data=json.load(f)
+    #     #extrinsics 
+    #     data=[]
+    #     with open(self.path_to_veh_calib / "lidar_to_camera" /frame_idx+"json","r") as f:
+    #         data=json.load(f)
 
-        t_l_c = data["translation"]
-        r_l_c = data["rotation"]
+    #     t_l_c = data["translation"]
+    #     r_l_c = data["rotation"]
 
-        with open(self.path_to_veh_calib / "lidar_to_novatel" /frame_idx+"json","r") as f:
-            data=json.load(f)
+    #     with open(self.path_to_veh_calib / "lidar_to_novatel" /frame_idx+"json","r") as f:
+    #         data=json.load(f)
 
-        t_l_n = data["translation"]
-        r_l_n = data["rotation"]
+    #     t_l_n = data["translation"]
+    #     r_l_n = data["rotation"]
 
-        with open(self.path_to_veh_calib / "lidar_to_novatel" /frame_idx+"json","r") as f:
-            data=json.load(f)
+    #     with open(self.path_to_veh_calib / "lidar_to_novatel" /frame_idx+"json","r") as f:
+    #         data=json.load(f)
 
-        t_n_w = data["translation"]
-        r_n_w = data["rotation"]
+    #     t_n_w = data["translation"]
+    #     r_n_w = data["rotation"]
 
 
 
@@ -167,14 +276,18 @@ class DAIRV2X_DATASET(Dataset):
         with open(self.path_to_data_info, "r") as f:
             data = json.load(f)
         database = [] 
+        read_k_elements=self.test_k_elem
+        c=0
         for elem in tqdm(data , desc=split_desc):
+            c=c+1 
+            if c>=read_k_elements and self.test_k :break  #for initial prototype
             frame_idx = elem["image_path"].split("/")[-1].replace(".jpg", "")
 
             if frame_idx not in split:
                 continue   #keep only frame idx in current split
 
-            label_camera = elem["label_camera_std_path"]    
-            label_lidar = elem["label_lidar_std_path"]
+            label_camera = elem["label_camera_std_path"]        
+            label_lidar = elem["label_lidar_std_path"]  
             img_path = self.data_path_veh_cam / elem["image_path"]                  #paths
             lidar_path = self.data_path_veh_lid / elem["pointcloud_path"]
 
@@ -210,6 +323,8 @@ class DAIRV2XDataModule(pl.LightningDataModule):
         path_to_gt_labels:str,
         path_to_data_splits:str,
         path_to_veh_calib:str,
+        test_k_elem:int,
+        test_k:bool,
         batch_size=128,
         num_workers=4,
         pin_memory=True,
@@ -234,6 +349,11 @@ class DAIRV2XDataModule(pl.LightningDataModule):
         self.path_to_veh_calib= path_to_veh_calib
         #splitting
         self.train_splits,self.val_splits,self.test_splits = self.parse_data_splits(self.path_to_data_splits) #get splits
+
+
+        #conf
+        self.test_k_elem=test_k_elem
+        self.test_k=test_k
 
     def parse_data_splits(self,path_to_data_splits):
         """
@@ -263,6 +383,8 @@ class DAIRV2XDataModule(pl.LightningDataModule):
                 path_to_gt_labels=self.path_to_gt_labels,
                 path_to_veh_calib=self.path_to_veh_calib,
                 desc="train",
+                test_k_elem=self.test_k_elem,
+                test_k=self.test_k
             )
 
             self.val_dataset = DAIRV2X_DATASET(
@@ -273,6 +395,8 @@ class DAIRV2XDataModule(pl.LightningDataModule):
                 path_to_gt_labels=self.path_to_gt_labels,
                 path_to_veh_calib=self.path_to_veh_calib,
                 desc="val",
+                test_k_elem=self.test_k_elem,
+                test_k=self.test_k
             )
 
         #testing
@@ -334,8 +458,40 @@ class DAIRV2XDataModule(pl.LightningDataModule):
                 for sample in batch
             ]
 
-            frame_idx = [sample[3] for sample in batch]
-        
+            camera_intrinsics=[sample[3] for sample in batch]
+
+            camera2lidar=  [
+                sample[4]
+                for sample in batch
+            ]
+
+            camera2ego =  [
+                sample[5]
+                for sample in batch
+            ]
+
+            lidar2ego =  [
+                sample[6]
+                for sample in batch
+            ]
+
+            img_aug_matrix=  [
+                sample[7]
+                for sample in batch
+            ]
+
+            lidar_aug_matrix= [
+                sample[8]
+                for sample in batch
+            ]
+
+            #make tensors out of calib matrices 
+            camera_intrinsics = torch.stack(camera_intrinsics) 
+            camera2lidar=torch.stack(camera2lidar)
+            camera2ego=torch.stack(camera2ego)
+            lidar2ego=torch.stack(lidar2ego)
+            img_aug_matrix=torch.stack(img_aug_matrix)
+            lidar_aug_matrix=torch.stack(lidar_aug_matrix)
 
 
             return {
@@ -344,7 +500,13 @@ class DAIRV2XDataModule(pl.LightningDataModule):
                 # lists because number differs per sample
                 "points": points,        # list of [Ni, 4]
                 "gt_boxes": gt_boxes,    # list of [Mi, box_dim]
-                "frame_idx":frame_idx,
+                "camera_intrinsics": camera_intrinsics,
+                "camera2lidar": camera2lidar,
+                "camera2ego": camera2ego,
+                "lidar2ego": lidar2ego,
+                "img_aug_matrix": img_aug_matrix,
+                "lidar_aug_matrix": lidar_aug_matrix
+
                 # "camera_intrinsics": torch.stack(
                 #     [sample["camera_intrinsics"] for sample in batch]
                 # ),
