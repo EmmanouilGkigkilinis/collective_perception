@@ -2,7 +2,7 @@ _target_: src.models.bevfusion_model.BEVFusionLightningModule
 _recursive_: false
 
 
-in_channels: 64
+in_channels: 256
 out_channels: 64
 image_size: [1080,1920]
 feature_size: [135,240]
@@ -13,3 +13,5 @@ dbound: [1.0, 60.0, 0.5]
 downsample: 1
 
 calib_path: /mnt/d/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/vehicle-side/calib/
+
+device: cuda

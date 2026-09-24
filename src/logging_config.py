@@ -11,7 +11,7 @@ def setup_logging(
 
     logging.basicConfig(
         level=level,
-        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+        format="%(asctime)s | %(pathname)s:%(lineno)d | %(message)s",
         handlers=[
             # logging.StreamHandler(),
             logging.FileHandler(log_path , mode="w")

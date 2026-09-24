@@ -280,7 +280,6 @@ class DAIRV2X_DATASET(Dataset):
         c=0
         for elem in tqdm(data , desc=split_desc):
             c=c+1 
-            if c>=read_k_elements and self.test_k :break  #for initial prototype
             frame_idx = elem["image_path"].split("/")[-1].replace(".jpg", "")
 
             if frame_idx not in split:
@@ -305,6 +304,9 @@ class DAIRV2X_DATASET(Dataset):
                              "ground_truth_veh_cam":ground_truth_veh_cam,  #2d bbox
                              "frame_idx": frame_idx
                                                                          })  
+            
+            if c>=read_k_elements and self.test_k :break  #for initial prototype
+
             
         logging.info("Loaded {} data for current {} split".format(len(database),split_desc))
 

@@ -20,10 +20,13 @@ class BEVFusionLightningModule(pl.LightningModule):
         dbound,
         downsample,
         calib_path,
+        device,
         lr=1e-4,
         weight_decay=1e-4,
     ):
         super().__init__()
+
+        # self.device=device
 
         self.model = BEVFusionV2X(in_channels,
                                     out_channels,
@@ -33,8 +36,11 @@ class BEVFusionLightningModule(pl.LightningModule):
                                     ybound,
                                     zbound,
                                     dbound,
-                                    downsample,              
-                                    calib_path)
+                                    downsample,
+                                    calib_path,
+                                    device=self.device )
+        
+        # model=model.to(self.device)
 
         self.lr = lr
         self.weight_decay = weight_decay
@@ -52,6 +58,10 @@ class BEVFusionLightningModule(pl.LightningModule):
         """
         training step batch
         """
+        batch=batch.to(self.device)
+        
+
+
         logging.info("Forward pass ")
         img = batch["image"]  #fix this for batches ... 
         points = batch["points"]
@@ -79,6 +89,8 @@ class BEVFusionLightningModule(pl.LightningModule):
         print("class file:", inspect.getfile(type(self.model)))
         print("forward file:", inspect.getfile(self.model.forward))
         print("=======================\n")
+
+
 
 
         outputs = self.model(

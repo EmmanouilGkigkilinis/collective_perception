@@ -1,14 +1,17 @@
 from typing import Tuple
-
+import logging
 import torch
 # from mmcv.runner import force_fp32
 from torch import nn
 
 from src.utils.architecture.lss.bev_pool import bev_pool
+from src.utils.helper_functions import get_shape
 
 # from mmdet3d.ops import bev_pool
 
 __all__ = ["BaseTransform", "BaseDepthTransform"]
+
+logging.getLogger(__file__)
 
 def boolmask2idx(mask):
     # A utility function, workaround for ONNX not supporting 'nonzero'
@@ -21,6 +24,9 @@ def gen_dx_bx(xbound, ybound, zbound):
         [(row[1] - row[0]) / row[2] for row in [xbound, ybound, zbound]]
     )
     return dx, bx, nx
+
+
+
 
 
 class BaseTransform(nn.Module):
@@ -226,16 +232,23 @@ class BaseTransform(nn.Module):
             'sensor2ego_mats': camera2ego, 
         }
 
+        img = img[0] #get only first of num_outs outputs of gen_lss_fpn.Got this from mmdet3d/prjects/bevfusion/bevfusion.py
+
+
         img=img.unsqueeze(0)  #add extra N=1 camera dimension
 
         x = self.get_cam_feats(img, mats_dict)
 
+        logging.info(get_shape(x))
+        
         use_depth = False
 
         if type(x) == tuple:
             x, depth = x 
             use_depth = True
         
+
+        # logging.info("after get cam feats got x of type {} and shape {}".format(type(x),x.shape))
         x = self.bev_pool(geom, x)
 
         if use_depth:
@@ -363,6 +376,8 @@ class BaseDepthTransform(BaseTransform):
             x, depth = x 
             use_depth = True
         
+        logging.info("get_cam_feats returns img of type {} and shape {}".format(type(x) , x.shape))
+
         x = self.bev_pool(geom, x)
 
         if use_depth:

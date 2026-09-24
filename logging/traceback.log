@@ -1,0 +1,165 @@
+Logging level: 30
+model:
+  _target_: src.models.bevfusion_model.BEVFusionLightningModule
+  _recursive_: false
+  in_channels: 256
+  out_channels: 64
+  image_size:
+  - 1080
+  - 1920
+  feature_size:
+  - 135
+  - 240
+  xbound:
+  - -50.0
+  - 50.0
+  - 0.5
+  ybound:
+  - -50.0
+  - 50.0
+  - 0.5
+  zbound:
+  - -10.0
+  - 10.0
+  - 20.0
+  dbound:
+  - 1.0
+  - 60.0
+  - 0.5
+  downsample: 1
+  calib_path: /mnt/d/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/vehicle-side/calib/
+  device: cuda
+data:
+  _target_: src.datamodules.detection_datamodule.DAIRV2XDataModule
+  data_path_veh_cam: /mnt/d/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/vehicle-side/
+  data_path_veh_lid: /mnt/d/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/vehicle-side/
+  path_to_data_info: /mnt/d/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/vehicle-side/data_info.json
+  path_to_gt_labels: /mnt/d/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/vehicle-side/
+  path_to_data_splits: /mnt/e/dev/hidden/projects/detection_dairv2x/src/utils/cooperative-split-data.json
+  path_to_veh_calib: /mnt/d/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/vehicle-side/calib/
+  batch_size: ${batch_size}
+  num_workers: 1
+  pin_memory: false
+  test_k: true
+  test_k_elem: 100
+trainer:
+  _target_: pytorch_lightning.Trainer
+  max_epochs: 500
+  gpus: 1
+  log_every_n_steps: 1
+  gradient_clip_val: 1.0
+logger:
+  _target_: pytorch_lightning.loggers.TensorBoardLogger
+  save_dir: lightning_logs
+  name: ${experiment_name}
+  version: ${now:%Y-%m-%d_%H-%M-%S}_${experiment_name}
+  default_hp_metric: false
+experiment_name: simple_transformer_hivt_preprocessing
+batch_size: 1
+modelcheckpoint_monitor: null
+seed: 42
+
+Global seed set to 42
+train:   0%|          | 0/15285 [00:00<?, ?it/s]train:   0%|          | 28/15285 [00:00<00:55, 274.17it/s]train:   0%|          | 58/15285 [00:00<00:53, 286.74it/s]train:   1%|          | 87/15285 [00:00<00:54, 276.50it/s]train:   1%|          | 99/15285 [00:00<00:56, 268.49it/s]
+val:   0%|          | 0/15285 [00:00<?, ?it/s]val:   6%|▌         | 871/15285 [00:00<00:00, 17653.27it/s]
+ModelCheckpoint(save_last=True, save_top_k=-1, monitor=None) will duplicate the last checkpoint saved.
+GPU available: True, used: True
+TPU available: False, using: 0 TPU cores
+IPU available: False, using: 0 IPUs
+/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/pytorch_lightning/core/datamodule.py:469: LightningDeprecationWarning: DataModule.setup has already been called, so it will not be called again. In v1.6 this behavior will change to always call DataModule.setup.
+  rank_zero_deprecation(
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+  | Name  | Type         | Params
+---------------------------------------
+0 | model | BEVFusionV2X | 41.7 M
+---------------------------------------
+30.2 M    Trainable params
+11.5 M    Non-trainable params
+41.7 M    Total params
+166.824   Total estimated model params size (MB)
+Validation sanity check: 0it [00:00, ?it/s]/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/pytorch_lightning/trainer/data_loading.py:110: UserWarning: The dataloader, val_dataloader 0, does not have many workers which may be a bottleneck. Consider increasing the value of the `num_workers` argument` (try 16 which is the number of cpus on this machine) in the `DataLoader` init to improve performance.
+  rank_zero_warn(
+Validation sanity check:   0%|          | 0/1 [00:00<?, ?it/s]self type: <class 'src.utils.architecture.lss.lss.LSSTransform'>
+MRO: (<class 'src.utils.architecture.lss.lss.LSSTransform'>, <class 'src.utils.architecture.lss.base.BaseTransform'>, <class 'torch.nn.modules.module.Module'>, <class 'object'>)
+super forward: <bound method BaseTransform.forward of LSSTransform(
+  (depthnet): Conv2d(256, 182, kernel_size=(1, 1), stride=(1, 1))
+  (downsample): Identity()
+)>
+super forward signature: (img, camera2ego, lidar2ego, camera_intrinsics, camera2lidar, img_aug_matrix, lidar_aug_matrix, points=None, radar=None, lidar2camera=None, lidar2image=None)
+kwargs: dict_keys(['img', 'points', 'camera_intrinsics', 'camera2lidar', 'camera2ego', 'lidar2ego', 'img_aug_matrix', 'lidar_aug_matrix'])
+Error executing job with overrides: []
+Traceback (most recent call last):
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/hydra/_internal/utils.py", line 211, in run_and_report
+    return func()
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/hydra/_internal/utils.py", line 368, in <lambda>
+    lambda: hydra.run(
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/hydra/_internal/hydra.py", line 110, in run
+    _ = ret.return_value
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/hydra/core/utils.py", line 233, in return_value
+    raise self._return_value
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/hydra/core/utils.py", line 160, in run_job
+    ret.return_value = task_function(task_cfg)
+  File "train.py", line 110, in main
+    trainer.fit(model = model , 
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/pytorch_lightning/trainer/trainer.py", line 737, in fit
+    self._call_and_handle_interrupt(
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/pytorch_lightning/trainer/trainer.py", line 682, in _call_and_handle_interrupt
+    return trainer_fn(*args, **kwargs)
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/pytorch_lightning/trainer/trainer.py", line 772, in _fit_impl
+    self._run(model, ckpt_path=ckpt_path)
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/pytorch_lightning/trainer/trainer.py", line 1195, in _run
+    self._dispatch()
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/pytorch_lightning/trainer/trainer.py", line 1274, in _dispatch
+    self.training_type_plugin.start_training(self)
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/pytorch_lightning/plugins/training_type/training_type_plugin.py", line 202, in start_training
+    self._results = trainer.run_stage()
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/pytorch_lightning/trainer/trainer.py", line 1284, in run_stage
+    return self._run_train()
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/pytorch_lightning/trainer/trainer.py", line 1306, in _run_train
+    self._run_sanity_check(self.lightning_module)
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/pytorch_lightning/trainer/trainer.py", line 1370, in _run_sanity_check
+    self._evaluation_loop.run()
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/pytorch_lightning/loops/base.py", line 145, in run
+    self.advance(*args, **kwargs)
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/pytorch_lightning/loops/dataloader/evaluation_loop.py", line 109, in advance
+    dl_outputs = self.epoch_loop.run(dataloader, dataloader_idx, dl_max_batches, self.num_dataloaders)
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/pytorch_lightning/loops/base.py", line 145, in run
+    self.advance(*args, **kwargs)
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/pytorch_lightning/loops/epoch/evaluation_epoch_loop.py", line 123, in advance
+    output = self._evaluation_step(batch, batch_idx, dataloader_idx)
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/pytorch_lightning/loops/epoch/evaluation_epoch_loop.py", line 215, in _evaluation_step
+    output = self.trainer.accelerator.validation_step(step_kwargs)
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/pytorch_lightning/accelerators/accelerator.py", line 236, in validation_step
+    return self.training_type_plugin.validation_step(*step_kwargs.values())
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/pytorch_lightning/plugins/training_type/training_type_plugin.py", line 219, in validation_step
+    return self.model.validation_step(*args, **kwargs)
+  File "/mnt/e/dev/hidden/projects/detection_dairv2x/src/models/bevfusion_model.py", line 156, in validation_step
+    outputs = self.model(  #lss model forward
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/torch/nn/modules/module.py", line 889, in _call_impl
+    result = self.forward(*input, **kwargs)
+  File "/mnt/e/dev/hidden/projects/detection_dairv2x/src/utils/architecture/bevfusion.py", line 183, in forward
+    cam_features_bev = self.camera_encoder(  #lss model forward
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/torch/nn/modules/module.py", line 889, in _call_impl
+    result = self.forward(*input, **kwargs)
+  File "/mnt/e/dev/hidden/projects/detection_dairv2x/src/utils/architecture/lss/lss.py", line 99, in forward
+    x = super().forward(**kwargs)
+  File "/mnt/e/dev/hidden/projects/detection_dairv2x/src/utils/architecture/lss/base.py", line 252, in forward
+    x = self.bev_pool(geom, x)
+  File "/mnt/e/dev/hidden/projects/detection_dairv2x/src/utils/architecture/lss/base.py", line 150, in bev_pool
+    B, N, D, H, W, C = x.shape
+AttributeError: 'NoneType' object has no attribute 'shape'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "train.py", line 124, in <module>
+    main()
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/hydra/main.py", line 49, in decorated_main
+    _run_hydra(
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/hydra/_internal/utils.py", line 367, in _run_hydra
+    run_and_report(
+  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/hydra/_internal/utils.py", line 251, in run_and_report
+    assert mdl is not None
+AssertionError
+                                                              

@@ -1,3 +1,4 @@
+import logging
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -8,9 +9,10 @@ from mmcv.cnn import ConvModule
 
 __all__ = ["GeneralizedLSSFPN"]
 
+logging.getLogger(__file__)
 
 # @NECKS.register_module()
-class GeneralizedLSSFPN():
+class GeneralizedLSSFPN(torch.nn.Module):
     def __init__(
         self,
         in_channels,
@@ -82,7 +84,9 @@ class GeneralizedLSSFPN():
         """Forward function."""
         # upsample -> cat -> conv1x1 -> conv3x3
 
-        
+        logging.error("Got inputs of len, {} where channels are {} and input[0] is {}".format(len(inputs),len(self.in_channels),inputs[0].shape))
+        # logging.info("got inputs of shape {} and type {}".format(inputs.shape ,type(inputs)))
+
         assert len(inputs) == len(self.in_channels)
 
         # build laterals

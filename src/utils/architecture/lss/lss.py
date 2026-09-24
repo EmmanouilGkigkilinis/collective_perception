@@ -1,8 +1,13 @@
+import logging
 from typing import Tuple
 # from mmcv.runner import force_fp32
 from torch import nn
+import logging
 from src.utils.architecture.lss.base import BaseTransform
+from src.utils.helper_functions import get_shape
 # from mmdet3d.models.builder import VTRANSFORMS
+
+logging.getLogger(__file__)
 
 # @VTRANSFORMS.register_module()
 class LSSTransform(BaseTransform):
@@ -60,16 +65,23 @@ class LSSTransform(BaseTransform):
         in current functoin
         """
         
+
         B, N, C, fH, fW = x.shape          
 
         x = x.view(B * N, C, fH, fW)
 
+
+
         x = self.depthnet(x)
+        
+        logging.info(get_shape(x))
+        
         depth = x[:, : self.D].softmax(dim=1)
         x = depth.unsqueeze(1) * x[:, self.D : (self.D + self.C)].unsqueeze(2)
 
         x = x.view(B, N, self.C, self.D, fH, fW)
         x = x.permute(0, 1, 3, 4, 5, 2)
+
         return
     
 

@@ -1,5 +1,6 @@
-
+import logging
 import json
+import logging
 import torch
 from src.utils.architecture.encoders import LSSCameraEncoder,PointPillarsEncoder
 from src.utils.architecture.util_models import BEVFusionNeck,CenterPointHead
@@ -10,6 +11,8 @@ from os import path as osp
 from src.utils.warping import warp_infra_bev_to_vehicle
 from src.utils.architecture.lss.lss import LSSTransform
 from src.utils.architecture.cam_feat_extraction.model_builder import mmdet3d_model_builder
+
+logger= logging.getLogger(__file__)
 
 class BEVFusionV2X(nn.Module):
     """
@@ -31,14 +34,15 @@ class BEVFusionV2X(nn.Module):
                 dbound,
                 downsample,
                 calib_path,
+                device,
                  pipe=None ):
         super().__init__()
         self.calib_path = calib_path
         # self.camera_encoder = LSSCameraEncoder(bev_h,bev_w)
         # self.camera_feature_extractor = CameraFeaturizer()
-        self.model_builder = mmdet3d_model_builder()
+        self.model_builder = mmdet3d_model_builder() #buidl camera backbones and necks 
         self.camera_backbone = self.model_builder.get_camera_backbone()
-        self.camera_neck = self.model_builder.get_camera_neck()
+        self.camera_neck = self.model_builder.get_camera_neck().to(device)
         
 
 
@@ -163,13 +167,21 @@ class BEVFusionV2X(nn.Module):
         FUSE
         CENTERPOINT
         """
+        logging.info("In bevfusion v2x got fwd img input of shape {}".format(img.shape))
+
         cam_features = self.camera_backbone(img)
 
-        cam_features = self.camera_neck.forward(img) 
+        logging.info("In bevfusion v2x got cam features of shape {} and dim {}".format(len(cam_features),cam_features[0].shape))
 
+        cam_features = self.camera_neck.forward(cam_features) 
+
+        logging.info("In bevfusion v2x got cam features  NECK of len {} and shape {}".format(len(cam_features),cam_features[0].shape))
+
+        logging.info("after gen lss fpn 1st output {}".format(cam_features[0].shape))
+        logging.info("after gen lss fpn 2nd output {}".format(cam_features[1].shape))
 
         cam_features_bev = self.camera_encoder(  #lss model forward
-            img=img,
+            img=cam_features,
             points=points , 
             camera_intrinsics = camera_intrinsics, 
             camera2lidar = camera2lidar , 
