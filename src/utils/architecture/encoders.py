@@ -68,4 +68,6 @@ class PointPillarsEncoder(nn.Module):
         lidar_pseudo_img: [B, C_in, H, W]
         returns lidar_bev: [B, C, H/2, W/2]
         """
-        return self.net(lidar_pseudo_img)
+        # lidar_pseudo_img = self.pillars_to_bev(lidar_pseudo_img)
+        infra_features_bev = self.net(lidar_pseudo_img)
+        return infra_features_bev

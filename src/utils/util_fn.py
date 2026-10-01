@@ -1,6 +1,7 @@
 from pypcd import pypcd 
 import mmcv
-import numpy as np 
+import numpy as np
+import torch 
 
 def read_pcd(path_pcd):
         """
@@ -29,7 +30,7 @@ def read_pcd(path_pcd):
             del_index,
             axis=0
         )
-        return pcd_np_points
+        return torch.tensor(pcd_np_points)
 
 def read_jpg(jpg_path):
     image = mmcv.imread(jpg_path)

@@ -60,8 +60,8 @@ modelcheckpoint_monitor: null
 seed: 42
 
 Global seed set to 42
-train:   0%|          | 0/15285 [00:00<?, ?it/s]train:   0%|          | 28/15285 [00:00<00:55, 274.17it/s]train:   0%|          | 58/15285 [00:00<00:53, 286.74it/s]train:   1%|          | 87/15285 [00:00<00:54, 276.50it/s]train:   1%|          | 99/15285 [00:00<00:56, 268.49it/s]
-val:   0%|          | 0/15285 [00:00<?, ?it/s]val:   6%|▌         | 871/15285 [00:00<00:00, 17653.27it/s]
+train:   0%|          | 0/15285 [00:00<?, ?it/s]train:   0%|          | 30/15285 [00:00<00:51, 298.49it/s]train:   0%|          | 60/15285 [00:00<00:56, 268.50it/s]train:   1%|          | 91/15285 [00:00<00:53, 284.91it/s]train:   1%|          | 99/15285 [00:00<00:53, 282.29it/s]
+val:   0%|          | 0/15285 [00:00<?, ?it/s]val:   6%|▌         | 871/15285 [00:00<00:00, 17539.70it/s]
 ModelCheckpoint(save_last=True, save_top_k=-1, monitor=None) will duplicate the last checkpoint saved.
 GPU available: True, used: True
 TPU available: False, using: 0 TPU cores
@@ -74,10 +74,10 @@ LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
 ---------------------------------------
 0 | model | BEVFusionV2X | 41.7 M
 ---------------------------------------
-30.2 M    Trainable params
+30.3 M    Trainable params
 11.5 M    Non-trainable params
 41.7 M    Total params
-166.824   Total estimated model params size (MB)
+166.954   Total estimated model params size (MB)
 Validation sanity check: 0it [00:00, ?it/s]/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/pytorch_lightning/trainer/data_loading.py:110: UserWarning: The dataloader, val_dataloader 0, does not have many workers which may be a bottleneck. Consider increasing the value of the `num_workers` argument` (try 16 which is the number of cpus on this machine) in the `DataLoader` init to improve performance.
   rank_zero_warn(
 Validation sanity check:   0%|          | 0/1 [00:00<?, ?it/s]self type: <class 'src.utils.architecture.lss.lss.LSSTransform'>
@@ -134,21 +134,9 @@ Traceback (most recent call last):
     return self.training_type_plugin.validation_step(*step_kwargs.values())
   File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/pytorch_lightning/plugins/training_type/training_type_plugin.py", line 219, in validation_step
     return self.model.validation_step(*args, **kwargs)
-  File "/mnt/e/dev/hidden/projects/detection_dairv2x/src/models/bevfusion_model.py", line 156, in validation_step
-    outputs = self.model(  #lss model forward
-  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/torch/nn/modules/module.py", line 889, in _call_impl
-    result = self.forward(*input, **kwargs)
-  File "/mnt/e/dev/hidden/projects/detection_dairv2x/src/utils/architecture/bevfusion.py", line 183, in forward
-    cam_features_bev = self.camera_encoder(  #lss model forward
-  File "/home/manos/miniforge3/envs/dairv2x/lib/python3.8/site-packages/torch/nn/modules/module.py", line 889, in _call_impl
-    result = self.forward(*input, **kwargs)
-  File "/mnt/e/dev/hidden/projects/detection_dairv2x/src/utils/architecture/lss/lss.py", line 99, in forward
-    x = super().forward(**kwargs)
-  File "/mnt/e/dev/hidden/projects/detection_dairv2x/src/utils/architecture/lss/base.py", line 252, in forward
-    x = self.bev_pool(geom, x)
-  File "/mnt/e/dev/hidden/projects/detection_dairv2x/src/utils/architecture/lss/base.py", line 150, in bev_pool
-    B, N, D, H, W, C = x.shape
-AttributeError: 'NoneType' object has no attribute 'shape'
+  File "/mnt/e/dev/hidden/projects/detection_dairv2x/src/models/bevfusion_model.py", line 167, in validation_step
+    loss = sum(outputs.values())
+RuntimeError: The size of tensor a (3) must match the size of tensor b (2) at non-singleton dimension 1
 
 During handling of the above exception, another exception occurred:
 

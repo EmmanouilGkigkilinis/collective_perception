@@ -11,6 +11,7 @@ from os import path as osp
 from src.utils.warping import warp_infra_bev_to_vehicle
 from src.utils.architecture.lss.lss import LSSTransform
 from src.utils.architecture.cam_feat_extraction.model_builder import mmdet3d_model_builder
+from src.utils.architecture.pointpillars.pointpillars_utils import PillarsToBEV
 
 logger= logging.getLogger(__file__)
 
@@ -56,7 +57,8 @@ class BEVFusionV2X(nn.Module):
                                             dbound,
                                             downsample,
                                             )
-        self.lidar_encoder = PointPillarsEncoder()
+        self.pillars_to_bev=PillarsToBEV()  #lidar vehicle
+        self.lidar_encoder = PointPillarsEncoder(in_channels=64) #lidar vehicle
         self.fusion = BEVFusionNeck()
         self.head = CenterPointHead()  # or TransFusion/Anchor3DHead
 
@@ -166,6 +168,12 @@ class BEVFusionV2X(nn.Module):
         NECK
         FUSE
         CENTERPOINT
+
+        INPUTS
+            img: [b,3,h,w]
+            points: [x,y,z,intensity]
+
+
         """
         logging.info("In bevfusion v2x got fwd img input of shape {}".format(img.shape))
 
@@ -191,37 +199,42 @@ class BEVFusionV2X(nn.Module):
             lidar_aug_matrix = lidar_aug_matrix
         )
 
+        logging.info("cam_features_bev output of encoder shape {}".format(cam_features_bev.shape))
+
         #apply_transform(points)
         #infra_features_veh_bev = self.lidar_encoder(points)
 
-        infra_features_bev = self.lidar_encoder(points)
+        logging.info("point cloud input to encoder of type {}".format(type(points)))
+
+        pseudo_lidar_img = self.pillars_to_bev(points)
+        infra_bev = self.lidar_encoder(pseudo_lidar_img)
 
         # ----------------------------------------
-        # Infrastructure -> Vehicle transform
+        # Infrastructure -> Vehicle transform               #apply in relevant branch only
         # ----------------------------------------
 
-        trans = transform(
-            from_coord="Infrastructure_lidar",
-            to_coord="Vehicle_lidar",
-        )
+        # trans = transform(
+        #     from_coord="Infrastructure_lidar",
+        #     to_coord="Vehicle_lidar",
+        # )
 
-        R, t = trans.get_rot_trans()
+        # R, t = trans.get_rot_trans()
 
         # ----------------------------------------
         # Spatial alignment
         # ----------------------------------------
 
-        infra_bev_aligned = warp_infra_bev_to_vehicle(
-            infra_bev=infra_bev,
-            R_inf_to_veh=R,
-            t_inf_to_veh=t,
-            xbound=self.xbound,
-            ybound=self.ybound,
-        )
+        # infra_bev_aligned = warp_infra_bev_to_vehicle(
+        #     infra_bev=infra_bev,
+        #     R_inf_to_veh=R,
+        #     t_inf_to_veh=t,
+        #     xbound=self.xbound,
+        #     ybound=self.ybound,
+        # )
 
         # lidar_bev = warp_infra_bev_to_vehicle(lidar_bev, trans)
 
-        fused_bev = self.fusion(cam_bev, infra_bev_aligned)
+        fused_bev = self.fusion(cam_features_bev, infra_bev)
 
         pred = self.head(fused_bev)
 

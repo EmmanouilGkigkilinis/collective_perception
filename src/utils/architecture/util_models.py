@@ -1,7 +1,7 @@
 from src.utils.architecture.encoders import ConvBNReLU
 import torch.nn as nn
 import torch
-from torch import functional as F 
+from torch.nn import functional as F 
 
 class BEVFusionNeck(nn.Module):
     def __init__(self, cam_channels=64, lidar_channels=64, out_channels=128):
@@ -56,10 +56,10 @@ class CenterPointHead(nn.Module):
         x = self.shared(x)
 
         return {
-            "heatmap": torch.sigmoid(self.heatmap_head(x)),
-            "reg": self.reg_head(x),
-            "height": self.height_head(x),
-            "dim": self.dim_head(x),
-            "rot": self.rot_head(x),
+            "heatmap": torch.sigmoid(self.heatmap_head(x)),#Centre score for each class
+            "reg": self.reg_head(x), #Fractional x/y offsets within the cell
+            "height": self.height_head(x), #Box’s vertical centre, in metres
+            "dim": self.dim_head(x), #Logarithms of length, width and height
+            "rot": self.rot_head(x),#Sine and cosine of yaw
         }
     

@@ -101,7 +101,7 @@ class DAIRV2X_DATASET(Dataset):
 
         logging.info("Outputting some points shape information after reading in dataset fetcher {}".format(points.shape))
 
-        points_batch = [torch.from_numpy(x).float() for x in points]
+        # points_batch = [torch.from_numpy(x).float() for x in points]
         # [N, 4]
 
         (camera_intrinsics,
@@ -255,7 +255,12 @@ class DAIRV2X_DATASET(Dataset):
             ground_truth_file=json.load(f)
         ground_truth_data=[]
         for obj_dict in ground_truth_file:
-            ground_truth_data.append(obj_dict["2d_box"])
+            ground_truth_data.append({"type":obj_dict["type"],
+                                        "2d_box":obj_dict["2d_box"],
+                                        "3d_dimensions":obj_dict["3d_dimensions"],
+                                        "3d_location":obj_dict["3d_location"],
+                                        "rotation":obj_dict["rotation"]
+                                      })  #centerpoint needs 3d dimensions
 
         return ground_truth_data
     
@@ -290,13 +295,14 @@ class DAIRV2X_DATASET(Dataset):
             img_path = self.data_path_veh_cam / elem["image_path"]                  #paths
             lidar_path = self.data_path_veh_lid / elem["pointcloud_path"]
 
-            ground_truth_veh_cam = self.parse_camera_label(label_camera)   #ground truth labels(2dbbox)
+            #ground truth veh cam returns bbox 3D properties, rotation
+            ground_truth_veh_cam = self.parse_camera_label(label_camera)  # #ground truth labels(2dbbox)
 
             
             # ------------------------
             # GT
             # ------------------------
-
+            
 
             database.append({                               #training sample 
                              "img":img_path , 
@@ -450,10 +456,10 @@ class DAIRV2XDataModule(pl.LightningDataModule):
                 [sample[0] for sample in batch]
             )
 
-            points = [
+            points = torch.stack([
                 sample[1]
                 for sample in batch
-            ]
+            ])
 
             gt_boxes = [
                 sample[2]

@@ -60,12 +60,14 @@ class BEVFusionLightningModule(pl.LightningModule):
         """
         batch=batch.to(self.device)
         
-
+        
 
         logging.info("Forward pass ")
         img = batch["image"]  #fix this for batches ... 
         points = batch["points"]
-        targets = batch["gt_boxes"]
+        targets_metric = batch["gt_boxes"]
+        targets_bev = encode_gt_batches(targets_metric)
+
         frame_idx = batch["frame_idx"]
 
 

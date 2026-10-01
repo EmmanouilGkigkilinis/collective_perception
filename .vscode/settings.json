@@ -1,4 +1,14 @@
 {
     "workbench.editor.limit.value": 20,
-    "editor.cursorBlinking": "solid"
+    "editor.cursorBlinking": "solid",
+    "python.testing.unittestArgs": [
+        "-v",
+        "-s",
+        "./tests",
+        "-p",
+        "*_test.py"
+    ],
+    "python.testing.pytestEnabled": false,
+    "python.testing.unittestEnabled": true,
+    "editor.wordWrap": "on"
 }
