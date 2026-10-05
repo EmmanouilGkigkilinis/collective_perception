@@ -35,7 +35,8 @@ class DAIRV2X_DATASET(Dataset):
                  path_to_gt_labels:str,
                  path_to_veh_calib:str,
                  test_k_elem:int,
-                 test_k:bool
+                 test_k:bool,
+                 class_names
                  ):
         """
         data_path_veh_camera = DAIRV2X-C vehicle-side images 
@@ -60,10 +61,17 @@ class DAIRV2X_DATASET(Dataset):
         self.test_k_elem=test_k_elem
         self.test_k=test_k
       
+        #classes
+        self.class_names=tuple(class_names)
+        self.class_to_id = {
+            name: i for i, name in enumerate(self.class_names)
+        }
+
         #-----database
         self.database = self.get_veh_cam_lid_frame_id(split , desc)  #construct database list from data_info of DAIRV2X 
 
-        
+
+
 
     def __len__(self):
         return len(self.database)
@@ -80,7 +88,7 @@ class DAIRV2X_DATASET(Dataset):
         points= sample["points"]
         frame_idx = sample["frame_idx"]
 
-        gt = sample["ground_truth_veh_cam"]
+        gt = sample["ground_truth_veh_cam"]  #multiple 3dbboxes at current time instance
 
         # ------------------------
         # Camera                |
@@ -255,12 +263,20 @@ class DAIRV2X_DATASET(Dataset):
             ground_truth_file=json.load(f)
         ground_truth_data=[]
         for obj_dict in ground_truth_file:
-            ground_truth_data.append({"type":obj_dict["type"],
-                                        "2d_box":obj_dict["2d_box"],
+            obj_id = self.class_to_id[obj_dict["type"]]  #conv class str to int
+            ground_truth_data.append({"type":obj_id,
+                                        "height":obj_dict["3d_location"]["z"],
+                                        "bbox":(obj_dict["3d_location"]["x"] , 
+                                                obj_dict["3d_location"]["y"]),
                                         "3d_dimensions":obj_dict["3d_dimensions"],
-                                        "3d_location":obj_dict["3d_location"],
-                                        "rotation":obj_dict["rotation"]
+                                        "rotation":obj_dict["rotation"],
                                       })  #centerpoint needs 3d dimensions
+            #check validity of obj, size can cause infinite training problems/wrong annotations
+            size=obj_dict["3d_dimensions"]
+            dims=torch.tensor([size["w"] , size["l"], size["h"]],dtype=torch.float32)
+            if not (torch.isfinite(dims).all() and (dims>0).all()):
+                raise ValueError("Found invalid sized object of type{} and bbox{} and size {}".format(obj_id,(obj_dict["3d_location"]["x"] , 
+                                                obj_dict["3d_location"]["y"]),size))
 
         return ground_truth_data
     
@@ -296,13 +312,18 @@ class DAIRV2X_DATASET(Dataset):
             lidar_path = self.data_path_veh_lid / elem["pointcloud_path"]
 
             #ground truth veh cam returns bbox 3D properties, rotation
-            ground_truth_veh_cam = self.parse_camera_label(label_camera)  # #ground truth labels(2dbbox)
+            try:
+                ground_truth_veh_cam = self.parse_camera_label(label_camera)  # #ground truth labels(3dbbox) (list of bboxes)
+            except ValueError as e:
+                print("Skipping object/invalid size")
+                print(e)
+                continue
 
             
             # ------------------------
             # GT
             # ------------------------
-            
+
 
             database.append({                               #training sample 
                              "img":img_path , 
@@ -333,12 +354,13 @@ class DAIRV2XDataModule(pl.LightningDataModule):
         path_to_veh_calib:str,
         test_k_elem:int,
         test_k:bool,
+        class_names,
         batch_size=128,
         num_workers=4,
         pin_memory=True,
     ):
         super().__init__()
-
+        self.class_names =class_names
 
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -392,7 +414,8 @@ class DAIRV2XDataModule(pl.LightningDataModule):
                 path_to_veh_calib=self.path_to_veh_calib,
                 desc="train",
                 test_k_elem=self.test_k_elem,
-                test_k=self.test_k
+                test_k=self.test_k,
+                class_names=self.class_names
             )
 
             self.val_dataset = DAIRV2X_DATASET(
@@ -404,7 +427,8 @@ class DAIRV2XDataModule(pl.LightningDataModule):
                 path_to_veh_calib=self.path_to_veh_calib,
                 desc="val",
                 test_k_elem=self.test_k_elem,
-                test_k=self.test_k
+                test_k=self.test_k,
+                class_names=self.class_names
             )
 
         #testing
@@ -461,7 +485,7 @@ class DAIRV2XDataModule(pl.LightningDataModule):
                 for sample in batch
             ])
 
-            gt_boxes = [
+            gt_boxes = [  #sample is a list of detections
                 sample[2]
                 for sample in batch
             ]

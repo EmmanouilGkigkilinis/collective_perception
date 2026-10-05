@@ -1,6 +1,8 @@
+from math import floor
+from pyparsing import Optional
 import torch
 
-from typing import List
+from typing import List, Tuple
 
 def encode_gt_batches(targets_metric:List, 
                     BEV_RANGE_HORZ: int,
@@ -8,7 +10,8 @@ def encode_gt_batches(targets_metric:List,
                     BEV_RANGE_HORZ_MIN:int,
                     BEV_RANGE_VERT_MIN:int, 
                     metres_per_cell:float,
-                    NUM_CLASSES:int  ):
+                    NUM_CLASSES:int,
+                    device:Optional  )->Tuple:
     """
     GT ENCODING SCHEME FOR CENTERPOINT DETECTION
 
@@ -24,8 +27,8 @@ def encode_gt_batches(targets_metric:List,
     encode rot: sine 
 
     INputs
-        targets_metric: targets in metric coords
-            list of gt dictionaries of loc,dim,rot
+        targets_metric: targets in metric coords [B,N] b batches N detections 
+            batches of lists of gt dictionaries of loc,dim,rot
         BEV_RANGE_HORZ: horizontal bev_range max
         BEV_RANGE_VERRT; vert bev_range max 
 
@@ -33,49 +36,57 @@ def encode_gt_batches(targets_metric:List,
         target: heatmap targets 
     """
 
-    heatmap = targets_metric
-
+    #targets metric [B , N , dicts]
     #make bbox
-    boxes_batch = [(batch["3d_location"]["x"],   
-                batch["3d_location"]["y"])
-                for batch  in targets_metric ]  
     
+    # for sample in targets_metric: #iterate over batch:
+        
 
-    classes_batch = [batch["type"] for batch in targets_metric]
+    boxes_batch = [[obj["bbox"] for obj in sample] for sample in targets_metric]
+        
+    classes_batch = [[obj["type"] for obj in sample] for sample in targets_metric]
 
-    pred_shape = (len(targets_metric) , NUM_CLASSES , BEV_RANGE_HORZ , BEV_RANGE_VERT )
+    pred_shape = (len(targets_metric) , NUM_CLASSES , BEV_RANGE_VERT , BEV_RANGE_HORZ )
 
     x_min = BEV_RANGE_HORZ_MIN
     y_min = BEV_RANGE_VERT_MIN
     
+    H = BEV_RANGE_VERT
+    W = BEV_RANGE_HORZ
     ###==================encode targets =======================
-    target_heatmap = make_heatmap_targets(boxes_batch=targets_metric["3d_location"],
-                                  classes_batch=classes_batch,
-                                  pred_shape=pred_shape,
-                                  x_min=x_min,
-                                  y_min=y_min,
-                                  metres_per_cell=metres_per_cell)
+    target_heatmap = make_heatmap_targets(boxes_batch=boxes_batch,
+                                            classes_batch=classes_batch,
+                                            pred_shape=pred_shape,
+                                            x_min=x_min,
+                                            y_min=y_min,
+                                            metres_per_cell=metres_per_cell)
 
 
 
-    target_offsets,target_heights,target_sizes,targets_rots = make_offset_targets(bboxes_batch=targets_metric,
-                                                                                  
-                                                    heights_batch = 
-                                                        [batch["3d_location"]["z"] for batch in targets_metric],
+    target_offsets, \
+    target_heights, \
+    target_sizes, \
+    targets_rots, \
+    target_mask = make_offset_targets(bboxes_batch=boxes_batch,                                                                                                                 
+                                    heights_batch = 
+                                        [[obj["height"] for obj in sample] for sample in targets_metric],
+                                        
+                                    rots_batch = [[obj["rotation"] for obj in sample] for sample in targets_metric],
+
+                                    size_batch = [[obj["3d_dimensions"] for obj in sample] for sample in targets_metric],
+
+                                    x_min=x_min,
+                                    y_min=y_min, 
+                                    metres_per_cell=metres_per_cell,H=H,W=W
                                                         
-                                                    rot_batch = [batch["rotation"] for batch in targets_metric],
+                                                                                            )
 
-                                                    size_batch = [batch["3d_dimensions"] for batch in targets_metric],
-
-                                                    x_min=x_min,
-                                                    y_min=y_min, 
-                                                    metres_per_cell=metres_per_cell
-                
-                                                    )
-
-
-
-    return target_heatmap , target_offsets, target_heights, target_sizes, targets_rots
+    return {"target_heatmap":target_heatmap.to(device) , 
+            "target_offsets":target_offsets.to(device), 
+            "target_height":target_heights.to(device), 
+            "target_size":target_sizes.to(device), 
+            "target_rots":targets_rots.to(device), 
+            "target_mask":target_mask.to(device)}
 
 
 # def make_height_targets(heights_batch , H ,W ):
@@ -92,11 +103,11 @@ def make_offset_targets(bboxes_batch,
                         size_batch , 
                         x_min , 
                         y_min , 
-                        meters_per_cell,
+                        metres_per_cell,
                         H,
                         W,):
     """
-    make targets for offset head of centerpoint
+    make targets for offset head of centerpoint , height size and rotation heads 
 
     return the difference of actual prediction in cell vs the cell of ground truth , which can be different due to discretization error.
 
@@ -104,33 +115,40 @@ def make_offset_targets(bboxes_batch,
 
     B = len(bboxes_batch) 
     target_offsets = torch.zeros(B ,2 , H , W)
-    targets_heights= torch.zeros(B, 1, H ,W )
-    targets_size = torch.zeros(B , 3 , H ,W )
-    targets_rots = torch.zeros (B, 2 , H ,W )
+    targets_heights= torch.zeros(B, 1, H , W)
+    targets_size = torch.zeros(B , 3 , H , W)
+    targets_rots = torch.zeros (B, 2 , H , W)
+    target_mask = torch.zeros(B, 1,H , W)
     for b in range(B):
         for bbox,height,rots,size in zip(bboxes_batch[b],heights_batch[b],rots_batch[b],size_batch[b]):
             x,y=bbox[0],bbox[1]
 
-            ux = (x - x_min) / meters_per_cell
-            uy = (y - y_min) / meters_per_cell
+            ux = (x - x_min) / metres_per_cell
+            uy = (y - y_min) / metres_per_cell
 
-            cx = int(torch.floor(ux))
-            cy = int(torch.floor(uy))
+            cx = int(floor(ux))
+            cy = int(floor(uy))
 
-            target_offsets[b , : , cx,cy] =  torch.stack([ux - cx, uy - cy])
+            target_offsets[b , : , cy,cx] =  torch.stack([torch.tensor(ux - cx), torch.tensor(uy - cy)])
             targets_heights[b, 0, cy, cx] = height
-            targets_size[b, :, cy, cx] = torch.log([i.values() for i in size.keys()])
+            targets_size[b, :, cy, cx] = torch.log(torch.tensor([size["w"],size["l"],size["h"]]))
             targets_rots[b, :, cy, cx] = torch.stack([
-                torch.sin(rots),
-                torch.cos(rots),
+                torch.sin(torch.tensor(rots)),
+                torch.cos(torch.tensor(rots)),
             ])
+            target_mask[b,: , cy,cx] = 1
 
             if not (0 <= cx < W and 0 <= cy < H):
                 continue
+            
+            check_infinite_dims(dims=torch.tensor(
+                [size["w"], size["l"], size["h"]],
+                dtype=torch.float32,
+            ) , b=b , bbox=bbox,size=size,obj_idx=3)
 
+            
     
-    return target_offsets,targets_heights,targets_size,targets_rots
-
+    return target_offsets,targets_heights,targets_size,targets_rots,target_mask 
 
 
 def make_heatmap_targets(boxes_batch, 
@@ -159,14 +177,14 @@ def make_heatmap_targets(boxes_batch,
     B, num_classes, H, W = pred_shape
 
     #construct target tensor , this is for heatmap head of centerpoint
-    target = torch.zeros(pred_shape, device=boxes_batch[0].device)
+    target = torch.zeros(pred_shape)
 
     radius = 2
     yy, xx = torch.meshgrid(
         torch.arange(-radius, radius + 1, device=target.device),
         torch.arange(-radius, radius + 1, device=target.device),
-        indexing="ij",
     )
+
 
     #gaussian around keybpoint
     gaussian = torch.exp(-(xx**2 + yy**2) / (2 * 1.0**2))
@@ -177,8 +195,8 @@ def make_heatmap_targets(boxes_batch,
             # box centre is in vehicle LiDAR metres
             x, y = box[0], box[1]  
             #box center in BEV cell discrete coordinates
-            cx = int(torch.floor((x - x_min) / metres_per_cell))
-            cy = int(torch.floor((y - y_min) / metres_per_cell))
+            cx = int(torch.floor(torch.tensor((x - x_min) / metres_per_cell)))
+            cy = int(torch.floor(torch.tensor((y - y_min) / metres_per_cell)))
             class_name = int(class_name)
 
             if not (0 <= cx < W and 0 <= cy < H):
@@ -200,6 +218,14 @@ def make_heatmap_targets(boxes_batch,
             target[b, class_name, y0:y1, x0:x1] = torch.maximum(patch, g)
 
     return target
+
+def check_infinite_dims(dims,b,obj_idx,bbox,size):
+            # These are the actual object's dimensions before log encoding.
+            if not torch.isfinite(dims).all() or (dims <= 0).any():
+                raise ValueError(
+                    f"Invalid dimensions: batch={b}, object={obj_idx}, "
+                    f"bbox={bbox}, dimensions={size}"
+                )
 
 
 # if __name__ == "__main__":

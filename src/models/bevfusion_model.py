@@ -5,6 +5,9 @@ from src.utils.architecture.bevfusion import BEVFusionV2X
 from src.utils.util_fn import read_jpg, read_pcd
 import logging
 
+from src.utils.centerpoint_utils import encode_gt_batches
+from src.utils.losses.losses import detection_3d_loss
+
 logging.getLogger(__file__)
 
 class BEVFusionLightningModule(pl.LightningModule):
@@ -21,10 +24,24 @@ class BEVFusionLightningModule(pl.LightningModule):
         downsample,
         calib_path,
         device,
+        output_bev_range_H,
+        output_bev_range_W,
+        output_bev_range_xmin,
+        output_bev_range_ymin,
+        metres_per_cell , 
+        num_classes, 
         lr=1e-4,
         weight_decay=1e-4,
     ):
         super().__init__()
+
+        self.output_bev_range_H = output_bev_range_H
+        self.output_bev_range_W = output_bev_range_W
+        self.output_bev_range_xmin = output_bev_range_xmin
+        self.output_bev_range_ymin = output_bev_range_ymin
+        self.meters_per_cell = metres_per_cell
+        self.num_classes = num_classes 
+        
 
         # self.device=device
 
@@ -38,7 +55,8 @@ class BEVFusionLightningModule(pl.LightningModule):
                                     dbound,
                                     downsample,
                                     calib_path,
-                                    device=self.device )
+                                    device=self.device,
+                                     num_classes=num_classes )
         
         # model=model.to(self.device)
 
@@ -47,7 +65,7 @@ class BEVFusionLightningModule(pl.LightningModule):
 
         self.save_hyperparameters(ignore=["model"])
 
-        
+        self.loss=detection_3d_loss(device = self.device )
 
     def on_train_epoch_start(self):
             print(f"\nEpoch {self.current_epoch + 1}/{self.trainer.max_epochs}")
@@ -58,17 +76,21 @@ class BEVFusionLightningModule(pl.LightningModule):
         """
         training step batch
         """
-        batch=batch.to(self.device)
+        # batch=batch.to(self.device)
         
-        
-
         logging.info("Forward pass ")
         img = batch["image"]  #fix this for batches ... 
         points = batch["points"]
         targets_metric = batch["gt_boxes"]
-        targets_bev = encode_gt_batches(targets_metric)
 
-        frame_idx = batch["frame_idx"]
+        targets_centerpoint = encode_gt_batches(targets_metric=targets_metric ,
+                                        BEV_RANGE_HORZ=self.output_bev_range_W,
+                                        BEV_RANGE_HORZ_MIN=self.output_bev_range_xmin,
+                                        BEV_RANGE_VERT=self.output_bev_range_H,
+                                        BEV_RANGE_VERT_MIN=self.output_bev_range_ymin,
+                                        metres_per_cell=self.meters_per_cell,
+                                        NUM_CLASSES=self.num_classes,
+                                        device=self.device)
 
 
         #calibration parameters
@@ -79,20 +101,6 @@ class BEVFusionLightningModule(pl.LightningModule):
         lidar_aug_matrix=batch["lidar_aug_matrix"]
         camera_intrinsics = batch["camera_intrinsics"]
         # frame_idx = batch["frame_idx"]
-
-        import inspect
-
-        print("\n===== MODEL DEBUG =====")
-        print("model object:", self.model)
-        print("model class:", type(self.model))
-        print("MRO:", type(self.model).__mro__)
-        print("forward:", self.model.forward)
-        print("forward signature:", inspect.signature(self.model.forward))
-        print("class file:", inspect.getfile(type(self.model)))
-        print("forward file:", inspect.getfile(self.model.forward))
-        print("=======================\n")
-
-
 
 
         outputs = self.model(
@@ -106,25 +114,70 @@ class BEVFusionLightningModule(pl.LightningModule):
             lidar_aug_matrix = lidar_aug_matrix
         )
 
-        # Example:
-        # outputs = {
-        #     "loss_cls": ...,
-        #     "loss_bbox": ...,
-        #     "loss_heatmap": ...
-        # }
-
-        loss = loss_fn(outputs, targets)
+        final_loss,\
+        heatmap_loss,\
+        offset_loss, \
+        height_loss, \
+        size_loss, \
+        rots_loss, = self.loss(outputs, targets_centerpoint)
 
         self.log(
-            "train_loss",
-            loss,
+            "total_train_loss",
+            final_loss,
             prog_bar=True,
             on_step=True,
             on_epoch=True,
             batch_size=self._get_batch_size(batch),
         )
 
-        for name, value in outputs.items():
+        self.log(
+            "heatmap_train_loss",
+            final_loss,
+            prog_bar=True,
+            on_step=True,
+            on_epoch=True,
+            batch_size=self._get_batch_size(batch),
+        )
+
+        self.log(
+            "offset_train)_loss",
+            final_loss,
+            prog_bar=True,
+            on_step=True,
+            on_epoch=True,
+            batch_size=self._get_batch_size(batch),
+        )
+
+        self.log(
+            "height__train_loss",
+            final_loss,
+            prog_bar=True,
+            on_step=True,
+            on_epoch=True,
+            batch_size=self._get_batch_size(batch),
+        )
+
+
+        self.log(
+            "size__train_loss",
+            final_loss,
+            prog_bar=True,
+            on_step=True,
+            on_epoch=True,
+            batch_size=self._get_batch_size(batch),
+        )
+
+        self.log(
+            "rotation_train_loss",
+            final_loss,
+            prog_bar=True,
+            on_step=True,
+            on_epoch=True,
+            batch_size=self._get_batch_size(batch),
+        )
+
+
+        for name, value in outputs.items():   #logs individual losses, step and epoch losses 
             self.log(
                 f"train/{name}",
                 value,
@@ -133,7 +186,7 @@ class BEVFusionLightningModule(pl.LightningModule):
                 batch_size=self._get_batch_size(batch),
             )
 
-        return loss
+        return final_loss
 
 
     def validation_step(self, batch, batch_idx):
@@ -144,6 +197,15 @@ class BEVFusionLightningModule(pl.LightningModule):
         img = batch["image"]  #fix this for batches ... 
         points = batch["points"]
         targets = batch["gt_boxes"]
+
+        targets_centerpoint = encode_gt_batches(targets_metric=targets ,
+                                                BEV_RANGE_HORZ=self.output_bev_range_W,
+                                                BEV_RANGE_HORZ_MIN=self.output_bev_range_xmin,
+                                                BEV_RANGE_VERT=self.output_bev_range_H,
+                                                BEV_RANGE_VERT_MIN=self.output_bev_range_ymin,
+                                                metres_per_cell=self.meters_per_cell,
+                                                NUM_CLASSES=self.num_classes,
+                                                device=self.device)
         
 
         #calibration parameters
@@ -166,25 +228,33 @@ class BEVFusionLightningModule(pl.LightningModule):
             lidar_aug_matrix = lidar_aug_matrix
         )
 
-        loss = sum(outputs.values())
+        # loss = sum(outputs.values())
+        final_loss,\
+        heatmap_loss,\
+        offset_loss, \
+        height_loss, \
+        size_loss, \
+        rots_loss, = self.loss(outputs, targets_centerpoint)
+
+        logging.info("Epoch {} , final total loss after validation is {}".format(self.current_epoch,final_loss))
 
         self.log(
             "val_loss",
-            loss,
+            final_loss,
             prog_bar=True,
             on_step=False,
             on_epoch=True,
             batch_size=self._get_batch_size(batch),
         )
-
-        for name, value in outputs.items():
-            self.log(
-                f"val/{name}",
-                value,
-                on_step=False,
-                on_epoch=True,
-                batch_size=self._get_batch_size(batch),
-            )
+ 
+        # for name, value in outputs.items():
+        #     self.log(
+        #         f"Actual ouput val/{name}",
+        #         value,
+        #         on_step=False,
+        #         on_epoch=True,
+        #         batch_size=self._get_batch_size(batch),
+        #     )
 
         return outputs
 

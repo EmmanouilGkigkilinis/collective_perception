@@ -36,6 +36,7 @@ class BEVFusionV2X(nn.Module):
                 downsample,
                 calib_path,
                 device,
+            num_classes,
                  pipe=None ):
         super().__init__()
         self.calib_path = calib_path
@@ -45,9 +46,7 @@ class BEVFusionV2X(nn.Module):
         self.camera_backbone = self.model_builder.get_camera_backbone()
         self.camera_neck = self.model_builder.get_camera_neck().to(device)
         
-
-
-        self.camera_encoder = LSSTransform(in_channels,
+        self.camera_encoder = LSSTransform(in_channels,  #view transform
                                             out_channels,
                                             image_size,
                                             feature_size,
@@ -59,8 +58,8 @@ class BEVFusionV2X(nn.Module):
                                             )
         self.pillars_to_bev=PillarsToBEV()  #lidar vehicle
         self.lidar_encoder = PointPillarsEncoder(in_channels=64) #lidar vehicle
-        self.fusion = BEVFusionNeck()
-        self.head = CenterPointHead()  # or TransFusion/Anchor3DHead
+        self.fusion = BEVFusionNeck() 
+        self.head = CenterPointHead(in_channels=128,num_classes=num_classes)  # or TransFusion/Anchor3DHead
 
         # self.x_bound=x_bound
         # self.y_bound=y_bound

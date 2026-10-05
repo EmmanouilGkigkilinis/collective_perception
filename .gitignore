@@ -1,0 +1,12 @@
+/lightning_Logs/
+/checkpoints/
+/tests
+/outputs/
+/logging/
+
+
+./lightning_Logs/*
+./checkpoints/*
+./tests/*
+./outputs/*
+./logging/*

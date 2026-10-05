@@ -23,4 +23,16 @@ pin_memory: False
 
 #conf
 test_k: True
-test_k_elem: 100
+test_k_elem: 1000
+
+class_names:
+  - Car
+  - Truck
+  - Van
+  - Bus
+  - Pedestrian
+  - Cyclist
+  - Tricyclist
+  - Motorcyclist
+  - Barrowlist
+  - Trafficcone

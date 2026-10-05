@@ -87,6 +87,7 @@ def main(cfg:DictConfig):
         cfg.trainer,
         callbacks=[checkpoint_callback],
         logger=logger,   #add extra hydra conf param
+        log_every_n_steps=1,
         enable_checkpointing=True,
         check_val_every_n_epoch=1,
     )
@@ -106,6 +107,12 @@ def main(cfg:DictConfig):
     #     print("Checkpoint dir:", checkpoint_callback.dirpath, file=f)
     #     print("Best model path:", checkpoint_callback.best_model_path, file=f)
     #     print("Last model path:", checkpoint_callback.last_model_path, file=f) #save callbacks 
+    print("Lightning version:", pl.__version__)
+    print("Working directory:", Path.cwd())
+    print("Active logger:", trainer.logger)
+    print("TensorBoard directory:", logger.log_dir)
+
+
 
     trainer.fit(model = model , 
                 datamodule=datamodule)

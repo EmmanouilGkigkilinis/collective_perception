@@ -48,7 +48,7 @@ class LSSTransform(BaseTransform):
                     stride=downsample,
                     padding=1,
                     bias=False,
-                ),
+                ), 
                 nn.BatchNorm2d(out_channels),
                 nn.ReLU(True),
                 nn.Conv2d(out_channels, out_channels, 3, padding=1, bias=False),
@@ -97,11 +97,11 @@ class LSSTransform(BaseTransform):
         
         import inspect
 
-        print("self type:", type(self))
-        print("MRO:", type(self).__mro__)
-        print("super forward:", super().forward)
-        print("super forward signature:", inspect.signature(super().forward))
-        print("kwargs:", kwargs.keys())
+        # print("self type:", type(self))
+        # print("MRO:", type(self).__mro__)
+        # print("super forward:", super().forward)
+        # print("super forward signature:", inspect.signature(super().forward))
+        # print("kwargs:", kwargs.keys())
         
         x = super().forward(**kwargs)
 
