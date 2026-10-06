@@ -7,6 +7,7 @@ import logging
 
 from src.utils.centerpoint_utils import encode_gt_batches
 from src.utils.losses.losses import detection_3d_loss
+from src.utils.metrics.metrics_3d_detection import Detection3DMetrics
 
 logging.getLogger(__file__)
 
@@ -56,7 +57,7 @@ class BEVFusionLightningModule(pl.LightningModule):
                                     downsample,
                                     calib_path,
                                     device=self.device,
-                                     num_classes=num_classes )
+                                    num_classes=num_classes )
         
         # model=model.to(self.device)
 
@@ -66,6 +67,19 @@ class BEVFusionLightningModule(pl.LightningModule):
         self.save_hyperparameters(ignore=["model"])
 
         self.loss=detection_3d_loss(device = self.device )
+
+        # Shared configuration; each instance maintains its own separate state.
+        metric_kwargs = dict(
+            x_min=self.output_bev_range_xmin,  # BEV minimum x in metres.
+            y_min=self.output_bev_range_ymin,  # BEV minimum y in metres.
+            metres_per_cell=self.meters_per_cell,  # Final detection-grid resolution.
+            score_threshold=0.1,              # Minimum prediction confidence.
+            thresh_iou=0.5,                   # Minimum 3D IoU for a correct match.
+            num_classes=num_classes,     # Number of heatmap classes.
+        )
+        self.val_metrics = Detection3DMetrics(**metric_kwargs)
+
+        self.train_metrics = Detection3DMetrics(**metric_kwargs)
 
     def on_train_epoch_start(self):
             print(f"\nEpoch {self.current_epoch + 1}/{self.trainer.max_epochs}")
@@ -83,7 +97,7 @@ class BEVFusionLightningModule(pl.LightningModule):
         points = batch["points"]
         targets_metric = batch["gt_boxes"]
 
-        targets_centerpoint = encode_gt_batches(targets_metric=targets_metric ,
+        targets_centerpoint = encode_gt_batches(targets_metric=targets_metric ,   #get BEV-coded targets 
                                         BEV_RANGE_HORZ=self.output_bev_range_W,
                                         BEV_RANGE_HORZ_MIN=self.output_bev_range_xmin,
                                         BEV_RANGE_VERT=self.output_bev_range_H,
@@ -176,7 +190,6 @@ class BEVFusionLightningModule(pl.LightningModule):
             batch_size=self._get_batch_size(batch),
         )
 
-
         for name, value in outputs.items():   #logs individual losses, step and epoch losses 
             self.log(
                 f"train/{name}",
@@ -185,6 +198,24 @@ class BEVFusionLightningModule(pl.LightningModule):
                 on_epoch=True,
                 batch_size=self._get_batch_size(batch),
             )
+
+        self.train_metrics.reset()
+        self.train_metrics.update(outputs, targets_metric)
+        train_results = self.train_metrics.compute()
+        for name, value in train_results.items():
+            self.log(
+                f"train_batch/{name}",
+                value,
+                on_step=True,
+                on_epoch=False,
+                prog_bar=(name == "mAP"),
+                logger=True,
+                batch_size=self._get_batch_size(batch),
+            )
+
+        # Release the accumulated prediction records.
+        self.train_metrics.reset()
+
 
         return final_loss
 
@@ -238,25 +269,97 @@ class BEVFusionLightningModule(pl.LightningModule):
 
         logging.info("Epoch {} , final total loss after validation is {}".format(self.current_epoch,final_loss))
 
+        self.val_metrics.update(outputs, targets)
+
         self.log(
-            "val_loss",
+            "total_val_loss",
             final_loss,
             prog_bar=True,
             on_step=False,
             on_epoch=True,
             batch_size=self._get_batch_size(batch),
         )
+
+
+        self.log(
+            "heatmap_val_loss",
+            heatmap_loss,
+            prog_bar=True,
+            on_step=True,
+            on_epoch=True,
+            batch_size=self._get_batch_size(batch),
+        )
+
+        self.log(
+            "offset_val_loss",
+            offset_loss,
+            prog_bar=True,
+            on_step=True,
+            on_epoch=True,
+            batch_size=self._get_batch_size(batch),
+        )
+
+        self.log(
+            "height_val_loss",
+            height_loss,
+            prog_bar=True,
+            on_step=True,
+            on_epoch=True,
+            batch_size=self._get_batch_size(batch),
+        )
+
+
+        self.log(
+            "size_val_loss",
+            size_loss,
+            prog_bar=True,
+            on_step=True,
+            on_epoch=True,
+            batch_size=self._get_batch_size(batch),
+        )
+
+        self.log(
+            "rotation_val_loss",
+            rots_loss,
+            prog_bar=True,
+            on_step=True,
+            on_epoch=True,
+            batch_size=self._get_batch_size(batch),
+        )
  
-        # for name, value in outputs.items():
-        #     self.log(
-        #         f"Actual ouput val/{name}",
-        #         value,
-        #         on_step=False,
-        #         on_epoch=True,
-        #         batch_size=self._get_batch_size(batch),
-        #     )
+
+        # x = x_min + (cx + dx) * metres_per_cell
+        # y = y_min + (cy + dy) * metres_per_cell
+
+        # # Your size targets were ordered [w, l, h].
+        # width, length, height = np.exp(log_sizes)
+
+        # yaw = np.arctan2(sin_yaw, cos_yaw)
+        # draw_bboxes(
+        #     gt_boxes,
+        #     pred_boxes,
+        #     xlim=(-20, 80),
+        #     ylim=(-40, 40),
+        # )
 
         return outputs
+    
+    def on_validation_epoch_start(self) -> None:
+        # Clear records and GT counts, including those from sanity validation.
+        self.val_metrics.reset()
+
+    def on_validation_epoch_end(self):
+        # Calculate AP using every validation batch accumulated this epoch.
+        metrics = self.val_metrics.compute()
+
+        # "AP50" assumes thresh_iou=0.5; change the name for other thresholds.
+        self.log_dict({
+            f"val_3d_AP50/{name}": value
+            for name, value in metrics.items()
+        })
+
+        # Release accumulated records and reset GT counts.
+        self.val_metrics.reset()
 
     def training_epoch_end(self, outputs):
         print(f"\nEpoch {self.current_epoch} train metrics:")

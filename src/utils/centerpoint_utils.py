@@ -146,7 +146,6 @@ def make_offset_targets(bboxes_batch,
                 dtype=torch.float32,
             ) , b=b , bbox=bbox,size=size,obj_idx=3)
 
-            
     
     return target_offsets,targets_heights,targets_size,targets_rots,target_mask 
 
@@ -230,3 +229,107 @@ def check_infinite_dims(dims,b,obj_idx,bbox,size):
 
 # if __name__ == "__main__":
     
+
+def decode_predictions(predictions , score_threshold):
+    """
+    decode predictions of type centerpoint , to get [x,y,z,l,w,h]
+    Desc: Given heatmap [B,H,W,C], find for each cell, which class is it, by taking the  maximum over classes. Then
+    input
+        predictions: [B , 5]    
+        threshold: numerical thresh to determine if an object is centered at each x,y location in the BEV grid 
+    """
+    # for p in predictions.shape[0]: #iterate over batch
+    heatmap = predictions["heatmap"]
+    B, C , H , W = heatmap.shape 
+
+    heatmap = heatmap.permute(0,2,3,1)
+    heatmap = heatmap.reshape(B, H * W, C)
+
+    scores , labels = torch.max(heatmap , dim = -1)   # Both have shape [B, 20000]
+
+    candidates = []
+
+    for b in range(B):
+        keep = scores[b] > score_threshold
+
+        # Flat indices of retained spatial cells, in those batches 
+        indices = keep.nonzero(as_tuple=True)[0]
+
+        cy = indices // W
+        cx = indices % W
+
+        candidates.append({
+            "cx": cx,
+            "cy": cy,
+            "scores": scores[b][keep],
+            "labels": labels[b][keep],
+        })
+
+    return candidates #[B , 4]
+
+def get_decoded_bbox_from_pred(predictions, 
+                               score_threshold , 
+                               metres_per_cell ,
+                               x_min, 
+                               y_min):
+    """
+    decode predictions to style [x,y,z,l,w,h,yaw], for all predictions inside a batch.
+    To get x,y we change from output bev coords to real world meters. 
+    Inputs
+        predictions: pred of centerpoint in batches
+        score_threshold: scoring threshold to get keypoints (obj centers)
+    outputs
+        candidates: batches of decoded predictions
+    """
+
+    candidates=decode_predictions(predictions=predictions,score_threshold=score_threshold)
+
+    results = []
+    for i , (batch_candidate) in enumerate(candidates):
+        offsets=predictions["reg"] #select batch
+        heights =predictions["height"]
+        dimensions= predictions["dim"]
+        rotations = predictions["rot"]
+
+        cy,cx=batch_candidate["cy"],batch_candidate["cx"]
+
+        dx = offsets[i,0,cy,cx].float()
+        dy = offsets[i,1,cy,cx].float()
+
+        x=x_min + (cx + dx)*metres_per_cell 
+        y=y_min + (cy + dy)*metres_per_cell
+        z=heights[i,0,cy,cx]
+        l=dimensions[i,0,cy,cx].float().exp()
+        w=dimensions[i,1,cy,cx].float().exp()
+        h=dimensions[i,2,cy,cx].float().exp()
+
+        sin_yaw = predictions["rot"][i, 0, cy, cx].float()
+        cos_yaw = predictions["rot"][i, 1, cy, cx].float()
+        yaw = torch.atan2(sin_yaw, cos_yaw)
+
+        boxes = torch.stack(
+            [x, y, z, l, w, h, yaw],
+            dim=-1,
+        )  # [N, 7], including [0, 7] when no candidates survive
+
+        results.append({
+            "boxes": boxes,
+            "scores": batch_candidate["scores"],
+            "labels": batch_candidate["labels"],
+
+        })
+
+        # candidates[i].update({"cx":candidates[i].update({"cx"}) + offsets[i][i,0,cy,cx].float()})
+        # candidates[i].update({"cy" : candidates[i].update({"cx"}) + offsets[i][i,1,cy,cx].float()})
+        # candidates[i].update({"heights" : })
+        # candidates[i].update({"dimensions" : })
+        # candidates[i].update({"rots" : rotations[i,:,cy,cx]})
+
+    
+    return results
+
+
+
+          
+
+     
