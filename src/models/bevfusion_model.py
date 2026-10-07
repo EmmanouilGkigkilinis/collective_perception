@@ -59,7 +59,7 @@ class BEVFusionLightningModule(pl.LightningModule):
                                     device=self.device,
                                     num_classes=num_classes )
         
-        # model=model.to(self.device)
+        self.model=self.model.to(self.device)
 
         self.lr = lr
         self.weight_decay = weight_decay
@@ -171,7 +171,6 @@ class BEVFusionLightningModule(pl.LightningModule):
             batch_size=self._get_batch_size(batch),
         )
 
-
         self.log(
             "size__train_loss",
             final_loss,
@@ -280,7 +279,6 @@ class BEVFusionLightningModule(pl.LightningModule):
             batch_size=self._get_batch_size(batch),
         )
 
-
         self.log(
             "heatmap_val_loss",
             heatmap_loss,
@@ -307,7 +305,6 @@ class BEVFusionLightningModule(pl.LightningModule):
             on_epoch=True,
             batch_size=self._get_batch_size(batch),
         )
-
 
         self.log(
             "size_val_loss",

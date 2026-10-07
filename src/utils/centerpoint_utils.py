@@ -290,7 +290,7 @@ def get_decoded_bbox_from_pred(predictions,
         heights =predictions["height"]
         dimensions= predictions["dim"]
         rotations = predictions["rot"]
-
+ 
         cy,cx=batch_candidate["cy"],batch_candidate["cx"]
 
         dx = offsets[i,0,cy,cx].float()
@@ -299,16 +299,16 @@ def get_decoded_bbox_from_pred(predictions,
         x=x_min + (cx + dx)*metres_per_cell 
         y=y_min + (cy + dy)*metres_per_cell
         z=heights[i,0,cy,cx]
-        l=dimensions[i,0,cy,cx].float().exp()
-        w=dimensions[i,1,cy,cx].float().exp()
+        w=dimensions[i,0,cy,cx].float().exp()
+        l=dimensions[i,1,cy,cx].float().exp()
         h=dimensions[i,2,cy,cx].float().exp()
 
-        sin_yaw = predictions["rot"][i, 0, cy, cx].float()
-        cos_yaw = predictions["rot"][i, 1, cy, cx].float()
+        sin_yaw = rotations[i, 0, cy, cx].float()
+        cos_yaw = rotations[i, 1, cy, cx].float()
         yaw = torch.atan2(sin_yaw, cos_yaw)
 
         boxes = torch.stack(
-            [x, y, z, l, w, h, yaw],
+            [x, y, z,  w, l , h, yaw],
             dim=-1,
         )  # [N, 7], including [0, 7] when no candidates survive
 

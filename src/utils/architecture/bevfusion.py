@@ -1,14 +1,15 @@
 import logging
 import json
 import logging
+import sys
 import torch
 from src.utils.architecture.encoders import LSSCameraEncoder,PointPillarsEncoder
 from src.utils.architecture.util_models import BEVFusionNeck,CenterPointHead
 import torch.nn as nn
 
 from os import path as osp
-
-from src.utils.warping import warp_infra_bev_to_vehicle
+from src.utils.architecture.detector.centerpoint_head import CenterPointHead
+# from src.utils.warping import warp_infra_bev_to_vehicle
 from src.utils.architecture.lss.lss import LSSTransform
 from src.utils.architecture.cam_feat_extraction.model_builder import mmdet3d_model_builder
 from src.utils.architecture.pointpillars.pointpillars_utils import PillarsToBEV
@@ -60,11 +61,15 @@ class BEVFusionV2X(nn.Module):
         self.lidar_encoder = PointPillarsEncoder(in_channels=64) #lidar vehicle
         self.fusion = BEVFusionNeck() 
         self.head = CenterPointHead(in_channels=128,num_classes=num_classes)  # or TransFusion/Anchor3DHead
-
+        # self.head = CenterPointHead
         # self.x_bound=x_bound
         # self.y_bound=y_bound
 
+        
 
+        # sys.exit()
+
+        # print("Input device:", bev_features.device)
         # self.img_aug_matrix = torch.eye(
         #         4,
         #         dtype=torch.float32,
@@ -174,6 +179,11 @@ class BEVFusionV2X(nn.Module):
 
 
         """
+        # print("CUDA available:", torch.cuda.is_available())
+        # print("Model device:", next(self.head.parameters()).device)
+        # print("Input device:", img.device)
+        # sys.exit()
+
         logging.info("In bevfusion v2x got fwd img input of shape {}".format(img.shape))
 
         cam_features = self.camera_backbone(img)

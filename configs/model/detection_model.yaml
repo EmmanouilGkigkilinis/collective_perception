@@ -21,6 +21,7 @@ num_classes: 10
 
 
 
-calib_path: /mnt/d/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/vehicle-side/calib/
+calib_path: /mnt/e/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/vehicle-side/calib/
+
 
 device: cuda

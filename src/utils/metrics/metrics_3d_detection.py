@@ -2,13 +2,15 @@ import torch
 from torchmetrics import Metric
 from src.utils.centerpoint_utils import get_decoded_bbox_from_pred
 from mmcv.ops import box_iou_rotated
-
+import logging
 import torch
 from torchmetrics import Metric
 from torchmetrics.utilities.data import dim_zero_cat
 
 from src.utils.centerpoint_utils import get_decoded_bbox_from_pred
 
+
+logging.getLogger(__file__)
 
 class Detection3DMetrics(Metric):
     # Evaluation uses discrete matching, so this metric is not differentiable.
@@ -103,6 +105,26 @@ class Detection3DMetrics(Metric):
 
         # Convert dataset object dictionaries into boxes and class tensors.
         gt_batch = self.get_gt_stacks_from_ds(targets)
+
+        # # region
+        # # Zero predictions means confidence filtering removed everything.
+        # logging.info("Number of predictions:", len(predictions["boxes"]))
+        # logging.info("Number of GT boxes:", len(gt_batch["boxes"]))
+
+        # # Compare class IDs and decoded box values.
+        # logging.info("Predicted labels:", predictions["labels"].unique())
+        # logging.info("GT labels:", gt_batch["labels"].unique())
+        # logging.info("Predicted boxes:", predictions["boxes"][:5])
+        # logging.info("GT boxes:", gt_batch["boxes"][:5])
+
+        # if predictions["scores"].numel() > 0:
+        #     # Inspect the confidence range among retained detections.
+        #     logging.info(
+        #         "Score range:",
+        #         predictions["scores"].min().item(),
+        #         predictions["scores"].max().item(),
+        #     )
+        # #endregion
 
         # Prevent zip() from silently dropping unmatched batch entries.
         if len(results) != len(gt_batch):

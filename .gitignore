@@ -3,7 +3,7 @@
 /tests
 /outputs/
 /logging/
-
+/extracted/
 
 ./lightning_Logs/*
 ./checkpoints/*
