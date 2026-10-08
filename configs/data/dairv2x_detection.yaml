@@ -17,7 +17,7 @@ pin_memory: False
 #validation
 
 #conf
-test_k: True
+test_k: False
 test_k_elem: 1000
 
 class_names:

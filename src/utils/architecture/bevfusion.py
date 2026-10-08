@@ -26,7 +26,7 @@ class BEVFusionV2X(nn.Module):
     HEAD centerpoint
     """
     def __init__(self, 
-                 in_channels,
+                in_channels,
                 out_channels,
                 image_size,
                 feature_size,
@@ -37,8 +37,8 @@ class BEVFusionV2X(nn.Module):
                 downsample,
                 calib_path,
                 device,
-            num_classes,
-                 pipe=None ):
+                num_classes,
+                pipe=None ):
         super().__init__()
         self.calib_path = calib_path
         # self.camera_encoder = LSSCameraEncoder(bev_h,bev_w)

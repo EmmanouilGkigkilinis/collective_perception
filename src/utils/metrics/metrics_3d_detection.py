@@ -29,7 +29,7 @@ class Detection3DMetrics(Metric):
         metres_per_cell,
         score_threshold,
         thresh_iou,
-        num_classes=3,
+        num_classes=10,
     ):
         # Initialize TorchMetrics' state-management machinery.
         super().__init__()
@@ -82,7 +82,7 @@ class Detection3DMetrics(Metric):
             Batch dictionary containing targets["gt_boxes"].
             gt_boxes is a list of samples, each containing object dictionaries.
         """
-
+        
         # Decode dense prediction maps into metric boxes.
         # results is a list with one dictionary per sample:
         # {
@@ -230,10 +230,12 @@ class Detection3DMetrics(Metric):
                 self.records.append(class_records)
 
     def compute(self):
-        """Compute AP from all batches accumulated since the last reset."""
-
-        # Combine prediction records from all processed frames.
-        # Shape: [total_number_of_predictions, 3].
+        """
+        Compute AP from all batches accumulated since the last reset.
+        """
+        
+        #Combine prediction records from all processed frames.
+        #Shape: [total_number_of_predictions, 3].
         records = (
             dim_zero_cat(self.records)
             if len(self.records) > 0

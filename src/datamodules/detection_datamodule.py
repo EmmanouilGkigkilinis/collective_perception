@@ -67,11 +67,26 @@ class DAIRV2X_DATASET(Dataset):
             name: i for i, name in enumerate(self.class_names)
         }
 
+
+        self.print_stats=True
+
+        #class statistics
+        self.statistics_classes={"Car":0,
+                                 "Truck":0,
+                                  "Van":0,
+                                 "Bus":0,
+                                 "Pedestrian":0,
+                                 "Cyclist":0,
+                                 "Tricyclist":0,
+                                 "Motorcyclist":0,
+                                 "Barrowlist":0,
+                                 "Trafficcone":0}
+
         #-----database
         self.database = self.get_veh_cam_lid_frame_id(split , desc)  #construct database list from data_info of DAIRV2X 
 
-
-
+        if self.print_stats:
+            print("Printing statistics for classes found in DAIRV2X dataset ,{}".format(self.statistics_classes))
 
     def __len__(self):
         return len(self.database)
@@ -275,8 +290,12 @@ class DAIRV2X_DATASET(Dataset):
             size=obj_dict["3d_dimensions"]
             dims=torch.tensor([size["w"] , size["l"], size["h"]],dtype=torch.float32)
             if not (torch.isfinite(dims).all() and (dims>0).all()):
-                raise ValueError("Found invalid sized object of type{} and bbox{} and size {}".format(obj_id,(obj_dict["3d_location"]["x"] , 
-                                                obj_dict["3d_location"]["y"]),size))
+                raise ValueError("Found invalid sized object of type{} and bbox{} and size {}, at label file {}".format(obj_id,(obj_dict["3d_location"]["x"] , 
+                                                obj_dict["3d_location"]["y"]),size, osp.join(self.path_to_gt_labels,label_camera) ))
+            
+
+            #find actual statistics
+            self.statistics_classes[obj_dict["type"]] = self.statistics_classes[obj_dict["type"]]+1
 
         return ground_truth_data
     

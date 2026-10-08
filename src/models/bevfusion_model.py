@@ -203,7 +203,7 @@ class BEVFusionLightningModule(pl.LightningModule):
         train_results = self.train_metrics.compute()
         for name, value in train_results.items():
             self.log(
-                f"train_batch/{name}",
+                f"train_batch_AP/{name}",
                 value,
                 on_step=True,
                 on_epoch=False,

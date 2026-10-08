@@ -308,7 +308,7 @@ def get_decoded_bbox_from_pred(predictions,
         yaw = torch.atan2(sin_yaw, cos_yaw)
 
         boxes = torch.stack(
-            [x, y, z,  w, l , h, yaw],
+            [x, y, z,  l, w , h, yaw],
             dim=-1,
         )  # [N, 7], including [0, 7] when no candidates survive
 
