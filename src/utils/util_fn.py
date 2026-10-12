@@ -1,3 +1,4 @@
+import sys
 from pypcd import pypcd 
 import mmcv
 import numpy as np
@@ -34,4 +35,6 @@ def read_pcd(path_pcd):
 
 def read_jpg(jpg_path):
     image = mmcv.imread(jpg_path)
+    # print("read image dtpe , shape{},{}".format(type(image.dtype),image.shape))
+    # sys.exit()
     return image

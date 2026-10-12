@@ -6,6 +6,7 @@ in_channels: 256
 out_channels: 64
 image_size: [1080,1920]
 feature_size: [135,240]
+
 xbound: [-50.0, 50.0, 0.5]
 ybound: [-50.0, 50.0, 0.5]
 zbound: [-10.0, 10.0, 20.0]
@@ -14,9 +15,9 @@ downsample: 1
 
 output_bev_range_H: 200
 output_bev_range_W: 200
-output_bev_range_xmin: -200
-output_bev_range_ymin: -200
-metres_per_cell: 10
+output_bev_range_xmin: -50
+output_bev_range_ymin: -50
+metres_per_cell: 0.5
 num_classes: 10  
 
 

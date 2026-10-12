@@ -385,6 +385,7 @@ class DAIRV2XDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
         self.pin_memory = pin_memory
 
+
         self.train_dataset = None
         self.val_dataset = None
         self.test_dataset = None

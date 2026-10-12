@@ -29,7 +29,7 @@ class Detection3DMetrics(Metric):
         metres_per_cell,
         score_threshold,
         thresh_iou,
-        num_classes=10,
+        num_classes=10, 
     ):
         # Initialize TorchMetrics' state-management machinery.
         super().__init__()
@@ -103,7 +103,7 @@ class Detection3DMetrics(Metric):
         # Without NMS, duplicate predictions are evaluated as extra detections
         # and can become false positives.
 
-        # Convert dataset object dictionaries into boxes and class tensors.
+        # Convert dataset object dictionaries into boxes and class tensors. (get metric tensors)
         gt_batch = self.get_gt_stacks_from_ds(targets)
 
         # # region
@@ -187,7 +187,7 @@ class Detection3DMetrics(Metric):
 
                 # Compare every prediction against every GT of this class.
                 # ious[i, j] = 3D IoU of prediction i and GT j.
-                ious = self.pairwise_iou(
+                ious = self.pairwise_iou(   
                     boxes,
                     gt_boxes,
                     mode="3d",

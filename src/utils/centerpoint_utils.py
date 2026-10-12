@@ -129,6 +129,9 @@ def make_offset_targets(bboxes_batch,
             cx = int(floor(ux))
             cy = int(floor(uy))
 
+            if not (0 <= cx < W and 0 <= cy < H):
+                continue
+
             target_offsets[b , : , cy,cx] =  torch.stack([torch.tensor(ux - cx), torch.tensor(uy - cy)])
             targets_heights[b, 0, cy, cx] = height
             targets_size[b, :, cy, cx] = torch.log(torch.tensor([size["w"],size["l"],size["h"]]))
@@ -137,9 +140,6 @@ def make_offset_targets(bboxes_batch,
                 torch.cos(torch.tensor(rots)),
             ])
             target_mask[b,: , cy,cx] = 1
-
-            if not (0 <= cx < W and 0 <= cy < H):
-                continue
             
             check_infinite_dims(dims=torch.tensor(
                 [size["w"], size["l"], size["h"]],
@@ -271,7 +271,7 @@ def get_decoded_bbox_from_pred(predictions,
                                score_threshold , 
                                metres_per_cell ,
                                x_min, 
-                               y_min):
+                               y_min)->List:
     """
     decode predictions to style [x,y,z,l,w,h,yaw], for all predictions inside a batch.
     To get x,y we change from output bev coords to real world meters. 

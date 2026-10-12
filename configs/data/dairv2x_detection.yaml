@@ -18,7 +18,7 @@ pin_memory: False
 
 #conf
 test_k: False
-test_k_elem: 1000
+test_k_elem: 100
 
 class_names:
   - Car

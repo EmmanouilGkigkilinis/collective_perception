@@ -86,8 +86,13 @@ class SepHead(nn.Module):
 class CenterHead(nn.Module):
     """Original-style task grouping and forward interface; no det3d imports."""
 
-    def __init__(self, in_channels, tasks, common_heads=None,
-                 share_conv_channel=64, head_conv=64, num_hm_conv=2,
+    def __init__(self, 
+                 in_channels, 
+                 tasks, 
+                 common_heads=None,
+                 share_conv_channel=64, 
+                 head_conv=64, 
+                 num_hm_conv=2,
                  init_bias=-2.19):
         super().__init__()
         if not tasks or any(not task['class_names'] for task in tasks):
@@ -138,6 +143,6 @@ class CenterPointHead(CenterHead):
     def forward(self, x):
         task_outputs, _ = super().forward(x)
         predictions = task_outputs[0]
-        predictions['heatmap'] = predictions.pop('hm')
+        predictions['heatmap'] = predictions.pop('hm').sigmoid()
         return predictions
 
