@@ -271,7 +271,8 @@ def get_decoded_bbox_from_pred(predictions,
                                score_threshold , 
                                metres_per_cell ,
                                x_min, 
-                               y_min)->List:
+                                y_min,
+                               filter=None)->List:
     """
     decode predictions to style [x,y,z,l,w,h,yaw], for all predictions inside a batch.
     To get x,y we change from output bev coords to real world meters. 
@@ -291,7 +292,7 @@ def get_decoded_bbox_from_pred(predictions,
         dimensions= predictions["dim"]
         rotations = predictions["rot"]
  
-        cy,cx=batch_candidate["cy"],batch_candidate["cx"]
+        cy,cx=batch_candidate["cy"],batch_candidate["cx"] #here cy,cx are H*W dimensional
 
         dx = offsets[i,0,cy,cx].float()
         dy = offsets[i,1,cy,cx].float()

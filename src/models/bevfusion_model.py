@@ -8,6 +8,7 @@ import logging
 from src.utils.centerpoint_utils import encode_gt_batches
 from src.utils.losses.losses import detection_3d_loss
 from src.utils.metrics.metrics_3d_detection import Detection3DMetrics
+from src.tests.viz_boxes import viz_boxes
 
 logging.getLogger(__file__)
 
@@ -31,6 +32,10 @@ class BEVFusionLightningModule(pl.LightningModule):
         output_bev_range_ymin,
         metres_per_cell , 
         num_classes, 
+        flag,
+        epoch_viz,
+        score_threshold,
+        thresh_iou,
         lr=1e-4,
         weight_decay=1e-4,
     ):
@@ -41,9 +46,11 @@ class BEVFusionLightningModule(pl.LightningModule):
         self.output_bev_range_xmin = output_bev_range_xmin
         self.output_bev_range_ymin = output_bev_range_ymin
         self.meters_per_cell = metres_per_cell
+        self.score_threshold=score_threshold
         self.num_classes = num_classes 
         
-
+        self.flag=flag
+        self.epoch_viz=epoch_viz
         # self.device=device
 
         self.model = BEVFusionV2X(in_channels,
@@ -97,6 +104,7 @@ class BEVFusionLightningModule(pl.LightningModule):
         points = batch["points"]
         targets_metric = batch["gt_boxes"]
 
+
         targets_centerpoint = encode_gt_batches(targets_metric=targets_metric ,   #get BEV-coded targets 
                                         BEV_RANGE_HORZ=self.output_bev_range_W,
                                         BEV_RANGE_HORZ_MIN=self.output_bev_range_xmin,
@@ -116,7 +124,6 @@ class BEVFusionLightningModule(pl.LightningModule):
         camera_intrinsics = batch["camera_intrinsics"]
         # frame_idx = batch["frame_idx"]
 
-
         outputs = self.model(
             img=img,
             points=points , 
@@ -127,6 +134,16 @@ class BEVFusionLightningModule(pl.LightningModule):
             img_aug_matrix=img_aug_matrix, 
             lidar_aug_matrix = lidar_aug_matrix
         )
+
+        if self.flag:
+            viz_boxes(predictions = outputs , 
+                        targets = batch,
+                        pc = points,
+                        score_threshold = self.score_threshold,
+                        metres_per_cell = self.meters_per_cell,
+                        x_min = self.output_bev_range_xmin,
+                        y_min = self.output_bev_range_ymin)  #vizualize pred
+
 
         final_loss,\
         heatmap_loss,\

@@ -13,7 +13,7 @@ from src.utils.centerpoint_utils import get_decoded_bbox_from_pred
 logging.getLogger(__file__)
 
 class Detection3DMetrics(Metric):
-    # Evaluation uses discrete matching, so this metric is not differentiable.
+    # Evaluation uses discrete matching, so this pmetric is not differentiable.
     is_differentiable = False
 
     # A higher AP value indicates better detection performance.
@@ -106,26 +106,6 @@ class Detection3DMetrics(Metric):
         # Convert dataset object dictionaries into boxes and class tensors. (get metric tensors)
         gt_batch = self.get_gt_stacks_from_ds(targets)
 
-        # # region
-        # # Zero predictions means confidence filtering removed everything.
-        # logging.info("Number of predictions:", len(predictions["boxes"]))
-        # logging.info("Number of GT boxes:", len(gt_batch["boxes"]))
-
-        # # Compare class IDs and decoded box values.
-        # logging.info("Predicted labels:", predictions["labels"].unique())
-        # logging.info("GT labels:", gt_batch["labels"].unique())
-        # logging.info("Predicted boxes:", predictions["boxes"][:5])
-        # logging.info("GT boxes:", gt_batch["boxes"][:5])
-
-        # if predictions["scores"].numel() > 0:
-        #     # Inspect the confidence range among retained detections.
-        #     logging.info(
-        #         "Score range:",
-        #         predictions["scores"].min().item(),
-        #         predictions["scores"].max().item(),
-        #     )
-        # #endregion
-
         # Prevent zip() from silently dropping unmatched batch entries.
         if len(results) != len(gt_batch):
             raise ValueError("Prediction and GT batch sizes differ")
@@ -158,7 +138,7 @@ class Detection3DMetrics(Metric):
 
                 # Keep only class-c predictions and GT.
                 boxes = pboxes[pred_mask]       # [Nc, 7]
-                scores = pscores[pred_mask]     # [Nc]
+                scores = pscores[pred_mask]     # [Nc] (keep only scores that are pred_mask ,the others are discarded)
                 gt_boxes = gboxes[gt_mask]      # [Mc, 7]
 
                 # Count every GT object, including those never detected.
@@ -371,9 +351,7 @@ class Detection3DMetrics(Metric):
         return batch
 
     def pairwise_iou(self, boxes1, boxes2, mode="3d"):
-
-
-
+        
         """Boxes: [N, 7], [x, y, z_center, l, w, h, yaw].
         
         retuns volume io

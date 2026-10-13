@@ -20,9 +20,14 @@ output_bev_range_ymin: -50
 metres_per_cell: 0.5
 num_classes: 10  
 
-
+score_threshold: 0.1  #score to take maximum class from heatmap outputs per cell
+thresh_iou: 0.5
 
 calib_path: /mnt/e/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/vehicle-side/calib/
 
 
 device: cuda
+
+#visualization
+flag: False
+epoch_viz: 0
