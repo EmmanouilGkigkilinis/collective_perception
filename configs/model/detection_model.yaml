@@ -7,18 +7,18 @@ out_channels: 64
 image_size: [1080,1920]
 feature_size: [135,240]
 
-xbound: [-50.0, 50.0, 0.5]
-ybound: [-50.0, 50.0, 0.5]
+xbound: [-150.0, 150.0, 1.0] #metres
+ybound: [-150.0, 150.0, 1.0]
 zbound: [-10.0, 10.0, 20.0]
 dbound: [1.0, 60.0, 0.5]
 downsample: 1
 
-output_bev_range_H: 200
-output_bev_range_W: 200
-output_bev_range_xmin: -50
-output_bev_range_ymin: -50
-metres_per_cell: 0.5
-num_classes: 10  
+output_bev_range_H: 300
+output_bev_range_W: 300
+output_bev_range_xmin: -150.0
+output_bev_range_ymin: -150.0
+metres_per_cell: 1.0
+num_classes: 10
 
 score_threshold: 0.1  #score to take maximum class from heatmap outputs per cell
 thresh_iou: 0.5
@@ -29,5 +29,6 @@ calib_path: /mnt/e/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/ve
 device: cuda
 
 #visualization
-flag: False
-epoch_viz: 0
+flag: True
+epoch_viz: 14
+epoch_viz_step: 20

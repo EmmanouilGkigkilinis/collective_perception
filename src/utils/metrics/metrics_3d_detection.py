@@ -1,6 +1,6 @@
 import torch
 from torchmetrics import Metric
-from src.utils.centerpoint_utils import get_decoded_bbox_from_pred
+from src.utils.centerpoint_utils import get_decoded_bbox_from_pred, nms_boxes
 from mmcv.ops import box_iou_rotated
 import logging
 import torch
@@ -99,7 +99,9 @@ class Detection3DMetrics(Metric):
         )
 
         # IMPORTANT:
-        # Apply your chosen NMS here if it is not part of the decoder.
+                # Rotated BEV NMS, independently per sample and class.
+        # Separate from self.thresh_iou, which controls GT matching.
+        pred = nms_boxes(results)
         # Without NMS, duplicate predictions are evaluated as extra detections
         # and can become false positives.
 
@@ -208,6 +210,8 @@ class Detection3DMetrics(Metric):
 
                 # An empty [0, 3] tensor is valid if this class had no predictions.
                 self.records.append(class_records)
+
+    
 
     def compute(self):
         """
@@ -446,9 +450,9 @@ class custom_Detection3DMetrics(Metric):
         self.iou_epoch.append(iou_list) #epoch 
         
 
-    def compute(self):
-        # Compute metrics over the entire accumulated dataset.
-        ...
+    # def compute(self):
+    #     # Compute metrics over the entire accumulated dataset.
+    #     ...
 
     def get_gt_stacks_from_ds(self,boxes):
         """

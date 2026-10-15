@@ -9,6 +9,7 @@ from src.utils.centerpoint_utils import encode_gt_batches
 from src.utils.losses.losses import detection_3d_loss
 from src.utils.metrics.metrics_3d_detection import Detection3DMetrics
 from src.tests.viz_boxes import viz_boxes
+from src.tests.viz_boxes_2 import viz_boxes as viz_boxes_2
 
 logging.getLogger(__file__)
 
@@ -36,6 +37,7 @@ class BEVFusionLightningModule(pl.LightningModule):
         epoch_viz,
         score_threshold,
         thresh_iou,
+        epoch_viz_step,
         lr=1e-4,
         weight_decay=1e-4,
     ):
@@ -48,7 +50,7 @@ class BEVFusionLightningModule(pl.LightningModule):
         self.meters_per_cell = metres_per_cell
         self.score_threshold=score_threshold
         self.num_classes = num_classes 
-        
+        self.epoch_viz_step=epoch_viz_step
         self.flag=flag
         self.epoch_viz=epoch_viz
         # self.device=device
@@ -135,14 +137,27 @@ class BEVFusionLightningModule(pl.LightningModule):
             lidar_aug_matrix = lidar_aug_matrix
         )
 
-        if self.flag:
+        if self.flag and self.current_epoch==self.epoch_viz and self.epoch_viz_step==None:
             viz_boxes(predictions = outputs , 
                         targets = batch,
                         pc = points,
                         score_threshold = self.score_threshold,
                         metres_per_cell = self.meters_per_cell,
                         x_min = self.output_bev_range_xmin,
-                        y_min = self.output_bev_range_ymin)  #vizualize pred
+                        y_min = self.output_bev_range_ymin,desc="{}".format(self.current_epoch),save_path=None)  #vizualize pred
+        elif self.epoch_viz_step is not None and (self.current_epoch %  self.epoch_viz_step  )==0 :
+            print("printing boxes")
+            viz_boxes(predictions = outputs , 
+                        targets = batch,
+                        pc = points,
+                        score_threshold = self.score_threshold,
+                        metres_per_cell = self.meters_per_cell,
+                        x_min = self.output_bev_range_xmin,
+                        y_min = self.output_bev_range_ymin,
+                        desc="{}".format(self.current_epoch),
+                        save_path="/mnt/e/dev/hidden/projects/detection_dairv2x/logging/io/"
+                        )  #vizualize pred
+            
 
 
         final_loss,\

@@ -1,8 +1,56 @@
 from math import floor
 from pyparsing import Optional
 import torch
-
+from mmcv.ops import box_iou_rotated, nms_rotated
 from typing import List, Tuple
+
+def nms_boxes(self, results):
+        nms_iou_threshold = 0.2
+
+        for pred in results:
+            boxes = pred["boxes"]    # [N, 7]: x, y, z, l, w, h, yaw
+            scores = pred["scores"]  # [N]
+            labels = pred["labels"]  # [N]
+
+            if boxes.shape[0] == 0:
+                continue
+
+            kept_indices = []
+
+            for class_id in labels.unique():
+                class_indices = torch.where(labels == class_id)[0]
+
+                # MMCV expects [center_x, center_y, local_x_size,
+                #               local_y_size, yaw].
+                bev_boxes = (
+                    boxes[class_indices][:, [0, 1, 3, 4, 6]]
+                    .detach()
+                    .float()
+                    .contiguous()
+                )
+                class_scores = (
+                    scores[class_indices].detach().float().contiguous()
+                )
+
+                _, keep = nms_rotated(
+                    bev_boxes,
+                    class_scores,
+                    nms_iou_threshold,
+                )
+
+                # Convert indices within this class to original indices.
+                kept_indices.append(class_indices[keep.long()])
+
+            keep = torch.cat(kept_indices)
+            keep = keep[scores[keep].argsort(descending=True)]
+
+            # Apply identical filtering to all three tensors.
+            pred["boxes"] = boxes[keep]
+            pred["scores"] = scores[keep]
+            pred["labels"] = labels[keep]
+
+        return pred
+
 
 def encode_gt_batches(targets_metric:List, 
                     BEV_RANGE_HORZ: int,
