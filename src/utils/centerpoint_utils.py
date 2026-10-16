@@ -275,9 +275,6 @@ def check_infinite_dims(dims,b,obj_idx,bbox,size):
                 )
 
 
-# if __name__ == "__main__":
-    
-
 def decode_predictions(predictions , score_threshold):
     """
     decode predictions of type centerpoint , to get [x,y,z,l,w,h]
@@ -340,8 +337,10 @@ def get_decoded_bbox_from_pred(predictions,
         dimensions= predictions["dim"]
         rotations = predictions["rot"]
  
+        #get candidate bbox centeres
         cy,cx=batch_candidate["cy"],batch_candidate["cx"] #here cy,cx are H*W dimensional
 
+        #get candidate offsets and other attributes only at cx cy which have passed scoring threshold
         dx = offsets[i,0,cy,cx].float()
         dy = offsets[i,1,cy,cx].float()
 
@@ -361,6 +360,9 @@ def get_decoded_bbox_from_pred(predictions,
             dim=-1,
         )  # [N, 7], including [0, 7] when no candidates survive
 
+
+        #results are actual predicted boxes decoded in metres, with scores (heatmap) 
+        # at each H*W cell of the BEV grid
         results.append({
             "boxes": boxes,
             "scores": batch_candidate["scores"],

@@ -89,7 +89,7 @@ class Detection3DMetrics(Metric):
         #     "boxes":  [N, 7],
         #     "scores": [N],
         #     "labels": [N],
-        # }
+        # }^^^
         results = get_decoded_bbox_from_pred(
             predictions=predictions,
             score_threshold=self.score_threshold,
@@ -105,7 +105,8 @@ class Detection3DMetrics(Metric):
         # Without NMS, duplicate predictions are evaluated as extra detections
         # and can become false positives.
 
-        # Convert dataset object dictionaries into boxes and class tensors. (get metric tensors)
+        # Convert dataset object dictionaries into boxes and class tensors. (get metric tensors) (SAME LIKE PREDICTIONS)
+        # {"boxes": ... , "labels": , ...}
         gt_batch = self.get_gt_stacks_from_ds(targets)
 
         # Prevent zip() from silently dropping unmatched batch entries.
@@ -209,15 +210,13 @@ class Detection3DMetrics(Metric):
                 )  # [Nc, 3]
 
                 # An empty [0, 3] tensor is valid if this class had no predictions.
-                self.records.append(class_records)
+                self.records.append(class_records)  #holds records for all objects for all classes (scores,tp) independently
 
-    
 
     def compute(self):
         """
         Compute AP from all batches accumulated since the last reset.
         """
-        
         #Combine prediction records from all processed frames.
         #Shape: [total_number_of_predictions, 3].
         records = (
@@ -229,6 +228,11 @@ class Detection3DMetrics(Metric):
         # Output dictionary and list of APs included in the class mean.
         metrics = {}
         class_aps = []
+
+        class_precisions=[]
+        class_recalls=[]
+        class_cum_tp = []
+        class_cum_fp= []
 
         for c in range(self.num_classes):
 
@@ -292,12 +296,21 @@ class Detection3DMetrics(Metric):
             metrics[f"AP_class_{c}"] = ap
             class_aps.append(ap)
 
+            class_precisions.append(precision)
+            class_recalls.append(recall)
+            class_cum_tp.append(cumulative_tp)
+            class_cum_fp.append(cumulative_fp)
+            metrics[f"recalls_class_{c}"]=class_recalls
+            metrics[f"cum_tp_class_{c}"]=class_cum_tp
+            metrics[f"cum_fp_class"]
+
         # mAP here means the mean across classes at ONE IoU threshold.
         metrics["mAP"] = (
             torch.stack(class_aps).mean()
             if class_aps
             else records.new_tensor(float("nan"))
         )
+        metrics["precision"] = precision
 
         return metrics
 

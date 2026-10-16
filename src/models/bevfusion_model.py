@@ -87,7 +87,7 @@ class BEVFusionLightningModule(pl.LightningModule):
             num_classes=num_classes,     # Number of heatmap classes.
         )
         self.val_metrics = Detection3DMetrics(**metric_kwargs)
-
+        self.val_batch_metrics=Detection3DMetrics(**metric_kwargs)
         self.train_metrics = Detection3DMetrics(**metric_kwargs)
 
     def on_train_epoch_start(self):
@@ -137,7 +137,7 @@ class BEVFusionLightningModule(pl.LightningModule):
             lidar_aug_matrix = lidar_aug_matrix
         )
 
-        if self.flag and self.current_epoch==self.epoch_viz and self.epoch_viz_step==None:
+        if self.flag and self.current_epoch==self.epoch_viz and self.epoch_vize_step==None:
             viz_boxes(predictions = outputs , 
                         targets = batch,
                         pc = points,
@@ -147,7 +147,7 @@ class BEVFusionLightningModule(pl.LightningModule):
                         y_min = self.output_bev_range_ymin,desc="{}".format(self.current_epoch),save_path=None)  #vizualize pred
         elif self.epoch_viz_step is not None and (self.current_epoch %  self.epoch_viz_step  )==0 :
             print("printing boxes")
-            viz_boxes(predictions = outputs , 
+            viz_boxes(predictions = outputs ,           
                         targets = batch,
                         pc = points,
                         score_threshold = self.score_threshold,
@@ -157,8 +157,7 @@ class BEVFusionLightningModule(pl.LightningModule):
                         desc="{}".format(self.current_epoch),
                         save_path="/mnt/e/dev/hidden/projects/detection_dairv2x/logging/io/"
                         )  #vizualize pred
-            
-
+        
 
         final_loss,\
         heatmap_loss,\
@@ -177,7 +176,16 @@ class BEVFusionLightningModule(pl.LightningModule):
         )
 
         self.log(
-            "heatmap_train_loss",
+            "heatmap_train__step_loss",
+            heatmap_loss,
+            prog_bar=True,
+            on_step=True,
+            on_epoch=True,
+            batch_size=self._get_batch_size(batch),
+        )
+
+        self.log(
+            "offset_train_step_loss",
             final_loss,
             prog_bar=True,
             on_step=True,
@@ -186,8 +194,8 @@ class BEVFusionLightningModule(pl.LightningModule):
         )
 
         self.log(
-            "offset_train)_loss",
-            final_loss,
+            "height__train_step_loss",
+            height_loss,
             prog_bar=True,
             on_step=True,
             on_epoch=True,
@@ -195,8 +203,8 @@ class BEVFusionLightningModule(pl.LightningModule):
         )
 
         self.log(
-            "height__train_loss",
-            final_loss,
+            "size__train_step_loss",
+            size_loss,
             prog_bar=True,
             on_step=True,
             on_epoch=True,
@@ -204,16 +212,7 @@ class BEVFusionLightningModule(pl.LightningModule):
         )
 
         self.log(
-            "size__train_loss",
-            final_loss,
-            prog_bar=True,
-            on_step=True,
-            on_epoch=True,
-            batch_size=self._get_batch_size(batch),
-        )
-
-        self.log(
-            "rotation_train_loss",
+            "rotation_train_step_loss",
             final_loss,
             prog_bar=True,
             on_step=True,
@@ -247,9 +246,7 @@ class BEVFusionLightningModule(pl.LightningModule):
         # Release the accumulated prediction records.
         self.train_metrics.reset()
 
-
         return final_loss
-
 
     def validation_step(self, batch, batch_idx):
         """
@@ -301,6 +298,7 @@ class BEVFusionLightningModule(pl.LightningModule):
         logging.info("Epoch {} , final total loss after validation is {}".format(self.current_epoch,final_loss))
 
         self.val_metrics.update(outputs, targets)
+
 
         self.log(
             "total_val_loss",
@@ -370,6 +368,20 @@ class BEVFusionLightningModule(pl.LightningModule):
         #     xlim=(-20, 80),
         #     ylim=(-40, 40),
         # )
+
+        # Diagnostic: evaluate exactly these validation predictions independently.
+        self.val_batch_metrics.reset()
+        self.val_batch_metrics.update(outputs, targets)
+        batch_metrics = self.val_batch_metrics.compute()
+
+        print(
+            f"Validation batch {batch_idx}: "
+            f"mAP={batch_metrics['mAP'].item():.8f}"
+        )
+
+        self.val_batch_metrics.reset()
+
+
 
         return outputs
     

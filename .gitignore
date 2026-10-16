@@ -9,4 +9,4 @@
 ./checkpoints/*
 ./tests/*
 ./outputs/*
-./logging/*
+./logging/**.log
