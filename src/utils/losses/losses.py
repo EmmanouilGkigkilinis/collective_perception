@@ -7,7 +7,7 @@ class detection_3d_loss(torch.nn.Module):
     def __init__(self , device):
         super().__init__()
         self.device=device
-
+        
     # def get_current_losses(self):
     #     return
 

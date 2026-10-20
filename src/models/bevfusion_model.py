@@ -4,7 +4,7 @@ import pytorch_lightning as pl
 from src.utils.architecture.bevfusion import BEVFusionV2X
 from src.utils.util_fn import read_jpg, read_pcd
 import logging
-
+import time
 from src.utils.centerpoint_utils import encode_gt_batches
 from src.utils.losses.losses import detection_3d_loss
 from src.utils.metrics.metrics_3d_detection import Detection3DMetrics
@@ -100,13 +100,15 @@ class BEVFusionLightningModule(pl.LightningModule):
         training step batch
         """
         # batch=batch.to(self.device)
-        
+        start = time.perf_counter()
+
+
         logging.info("Forward pass ")
         img = batch["image"]  #fix this for batches ... 
         points = batch["points"]
         targets_metric = batch["gt_boxes"]
 
-
+        start3=time.perf_counter()
         targets_centerpoint = encode_gt_batches(targets_metric=targets_metric ,   #get BEV-coded targets 
                                         BEV_RANGE_HORZ=self.output_bev_range_W,
                                         BEV_RANGE_HORZ_MIN=self.output_bev_range_xmin,
@@ -115,6 +117,10 @@ class BEVFusionLightningModule(pl.LightningModule):
                                         metres_per_cell=self.meters_per_cell,
                                         NUM_CLASSES=self.num_classes,
                                         device=self.device)
+        elapsed3 = time.perf_counter() - start3
+
+        logging.info(f"Elapsed time in encode_gt_batches of training step {elapsed3:.3f} at epoch {self.current_epoch}")
+        print(f"Elapsed time in encode_gt_batches training step {elapsed3:.3f} at epoch {self.current_epoch} and batch idx {batch_idx}")
 
 
         #calibration parameters
@@ -126,6 +132,8 @@ class BEVFusionLightningModule(pl.LightningModule):
         camera_intrinsics = batch["camera_intrinsics"]
         # frame_idx = batch["frame_idx"]
 
+
+        start2=time.perf_counter()
         outputs = self.model(
             img=img,
             points=points , 
@@ -136,27 +144,31 @@ class BEVFusionLightningModule(pl.LightningModule):
             img_aug_matrix=img_aug_matrix, 
             lidar_aug_matrix = lidar_aug_matrix
         )
+        elapsed2 = time.perf_counter() - start2
 
-        if self.flag and self.current_epoch==self.epoch_viz and self.epoch_vize_step==None:
-            viz_boxes(predictions = outputs , 
-                        targets = batch,
-                        pc = points,
-                        score_threshold = self.score_threshold,
-                        metres_per_cell = self.meters_per_cell,
-                        x_min = self.output_bev_range_xmin,
-                        y_min = self.output_bev_range_ymin,desc="{}".format(self.current_epoch),save_path=None)  #vizualize pred
-        elif self.epoch_viz_step is not None and (self.current_epoch %  self.epoch_viz_step  )==0 :
-            print("printing boxes")
-            viz_boxes(predictions = outputs ,           
-                        targets = batch,
-                        pc = points,
-                        score_threshold = self.score_threshold,
-                        metres_per_cell = self.meters_per_cell,
-                        x_min = self.output_bev_range_xmin,
-                        y_min = self.output_bev_range_ymin,
-                        desc="{}".format(self.current_epoch),
-                        save_path="/mnt/e/dev/hidden/projects/detection_dairv2x/logging/io/"
-                        )  #vizualize pred
+        logging.info(f"Elapsed time in self.model() of training step {elapsed2:.3f} at epoch {self.current_epoch}")
+        print(f"Elapsed time in self.model() training step {elapsed2:.3f} at epoch {self.current_epoch} and batch idx {batch_idx}")
+
+        # if self.flag and self.current_epoch==self.epoch_viz and self.epoch_vize_step==None:
+        #     viz_boxes(predictions = outputs , 
+        #                 targets = batch,
+        #                 pc = points,
+        #                 score_threshold = self.score_threshold,
+        #                 metres_per_cell = self.meters_per_cell,
+        #                 x_min = self.output_bev_range_xmin,
+        #                 y_min = self.output_bev_range_ymin,desc="{}".format(self.current_epoch),save_path=None)  #vizualize pred
+        # elif self.flag and (self.epoch_viz_step is not None) and (self.current_epoch %  self.epoch_viz_step  )==0 :
+        #     print("printing boxes")
+        #     viz_boxes(predictions = outputs ,           
+        #                 targets = batch,
+        #                 pc = points,
+        #                 score_threshold = self.score_threshold,
+        #                 metres_per_cell = self.meters_per_cell,
+        #                 x_min = self.output_bev_range_xmin,
+        #                 y_min = self.output_bev_range_ymin,
+        #                 desc="{}".format(self.current_epoch),
+        #                 save_path="/mnt/e/dev/hidden/projects/detection_dairv2x/logging/io/"
+        #                 )  #vizualize pred
         
 
         final_loss,\
@@ -186,7 +198,7 @@ class BEVFusionLightningModule(pl.LightningModule):
 
         self.log(
             "offset_train_step_loss",
-            final_loss,
+            offset_loss,
             prog_bar=True,
             on_step=True,
             on_epoch=True,
@@ -213,26 +225,28 @@ class BEVFusionLightningModule(pl.LightningModule):
 
         self.log(
             "rotation_train_step_loss",
-            final_loss,
+            rots_loss,
             prog_bar=True,
             on_step=True,
             on_epoch=True,
             batch_size=self._get_batch_size(batch),
         )
 
-        for name, value in outputs.items():   #logs individual losses, step and epoch losses 
-            self.log(
-                f"train/{name}",
-                value,
-                on_step=False,
-                on_epoch=True,
-                batch_size=self._get_batch_size(batch),
-            )
+        start4=time.perf_counter()
+
+        # for name, value in outputs.items():   #logs individual losses, step and epoch losses 
+        #     self.log(
+        #         f"train/{name}",
+        #         value,
+        #         on_step=False,
+        #         on_epoch=True,
+        #         batch_size=self._get_batch_size(batch),
+        #     )
 
         self.train_metrics.reset()
         self.train_metrics.update(outputs, targets_metric)
-        train_results = self.train_metrics.compute()
-        for name, value in train_results.items():
+        train_metrics_values, train_metrics_values_2 = self.train_metrics.compute()
+        for name, value in train_metrics_values.items():
             self.log(
                 f"train_batch_AP/{name}",
                 value,
@@ -242,9 +256,29 @@ class BEVFusionLightningModule(pl.LightningModule):
                 logger=True,
                 batch_size=self._get_batch_size(batch),
             )
+        # for name, value in train_metrics_values_2.items():
+        #     self.log(
+        #         f"train_batch/{name}",
+        #         value,
+        #         on_step=True,
+        #         on_epoch=False,
+        #         prog_bar=(name == "mAP"),
+        #         logger=True,
+        #         batch_size=self._get_batch_size(batch),
+        #     )
+        
 
         # Release the accumulated prediction records.
         self.train_metrics.reset()
+        elapsed4 = time.perf_counter() - start4
+        logging.info(f"Elapsed time in logging  training step {elapsed4:.3f} at epoch {self.current_epoch}")
+        print(f"Elapsed time in logging training step {elapsed4:.3f} at epoch {self.current_epoch} and batch idx {batch_idx}")
+
+
+        elapsed = time.perf_counter() - start
+
+        logging.info(f"Elapsed time in forward call of training step {elapsed:.3f} at epoch {self.current_epoch}")
+        print(f"Elapsed time in forward call training step {elapsed:.3f} at epoch {self.current_epoch} and batch idx {batch_idx}")
 
         return final_loss
 
@@ -304,7 +338,7 @@ class BEVFusionLightningModule(pl.LightningModule):
             "total_val_loss",
             final_loss,
             prog_bar=True,
-            on_step=False,
+            on_step=True,
             on_epoch=True,
             batch_size=self._get_batch_size(batch),
         )
@@ -369,18 +403,45 @@ class BEVFusionLightningModule(pl.LightningModule):
         #     ylim=(-40, 40),
         # )
 
+        if self.flag and self.current_epoch==self.epoch_viz and self.epoch_vize_step==None:
+            viz_boxes(predictions = outputs , 
+                        targets = batch,
+                        pc = points,
+                        score_threshold = self.score_threshold,
+                        metres_per_cell = self.meters_per_cell,
+                        x_min = self.output_bev_range_xmin,
+                        y_min = self.output_bev_range_ymin,desc="{}".format(self.current_epoch),save_path=None)  #vizualize pred
+        elif self.flag and (self.epoch_viz_step is not None) and (self.current_epoch %  self.epoch_viz_step  )==0 :
+            print("printing validation boxes")
+            viz_boxes(predictions = outputs ,           
+                        targets = batch,
+                        pc = points,
+                        score_threshold = self.score_threshold,
+                        metres_per_cell = self.meters_per_cell,
+                        x_min = self.output_bev_range_xmin,
+                        y_min = self.output_bev_range_ymin,
+                        desc="validation-{}".format(self.current_epoch),
+                        save_path="/mnt/e/dev/hidden/projects/detection_dairv2x/logging/io/"
+                        )  #vizualize pred
+
         # Diagnostic: evaluate exactly these validation predictions independently.
         self.val_batch_metrics.reset()
         self.val_batch_metrics.update(outputs, targets)
-        batch_metrics = self.val_batch_metrics.compute()
+        batch_metrics , batch_metrics_2 = self.val_batch_metrics.compute()
 
-        print(
-            f"Validation batch {batch_idx}: "
-            f"mAP={batch_metrics['mAP'].item():.8f}"
-        )
+
+        
+        
+        # print(
+        #     f"Validation batch {batch_idx}: "
+        #     f"mAP={batch_metrics['mAP'].item():.8f}"
+        # )
+        self.log_dict({
+            f"val_3d_AP50_batch/{name}": value
+            for name, value in batch_metrics.items()
+        })
 
         self.val_batch_metrics.reset()
-
 
 
         return outputs
@@ -391,7 +452,7 @@ class BEVFusionLightningModule(pl.LightningModule):
 
     def on_validation_epoch_end(self):
         # Calculate AP using every validation batch accumulated this epoch.
-        metrics = self.val_metrics.compute()
+        metrics,_ = self.val_metrics.compute()
 
         # "AP50" assumes thresh_iou=0.5; change the name for other thresholds.
         self.log_dict({

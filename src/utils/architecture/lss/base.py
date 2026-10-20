@@ -214,8 +214,6 @@ class BaseTransform(nn.Module):
         extra_rots = lidar_aug_matrix[..., :3, :3]
         extra_trans = lidar_aug_matrix[..., :3, 3]
         
-
-
         geom = self.get_geometry(
             camera2lidar_rots,
             camera2lidar_trans,
@@ -233,7 +231,6 @@ class BaseTransform(nn.Module):
         }
 
         img = img[0] #get only first of num_outs outputs of gen_lss_fpn.Got this from mmdet3d/prjects/bevfusion/bevfusion.py
-
 
         img=img.unsqueeze(0)  #add extra N=1 camera dimension
 

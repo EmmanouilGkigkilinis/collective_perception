@@ -1,0 +1,222 @@
+from pathlib import Path
+import torch
+from tqdm import tqdm
+from src.models.bevfusion_model import BEVFusionV2X
+from src.utils.centerpoint_utils import get_decoded_bbox_from_pred, nms_boxes
+from src.models.bevfusion_model import BEVFusionLightningModule
+from src.tests.viz_boxes import viz_boxes
+
+
+def inference_loader():
+    """
+    generator
+
+    #model ingested by getitem:
+        points,imaage,camera_intrinsics,camera2lidar,camera2ego,lidar2ego,img_aug_matrix
+    """
+
+    image_root=Path("/mnt/e/dev/hidden/data/iccs_collaborative_dataset/dataset/reconstructed/recording_0000/images/")
+    pcd_root=Path("/mnt/e/dev/hidden/data/iccs_collaborative_dataset/dataset/reconstructed/recording_0000/velo/")
+
+    for img_path,pcd_path in zip(image_root.rglob("*.npy"), pcd_root.rglob("*.npy")):
+
+        print(f"Reading image at path {img_path}")
+        print(f"Reading pcd at path {pcd_path}")
+
+
+        pcd=read_npy(pcd_path)
+        img=read_npy_image(img_path)
+        camera_intrinsics,camera2lidar=get_calib()
+
+        K = torch.tensor(
+            camera_intrinsics,
+            dtype=torch.float32,
+        ).reshape(3, 3)
+        # BEVFusion uses homogeneous 4x4 calibration matrices
+        K4 = torch.eye(4, dtype=torch.float32)
+        K4[:3, :3] = K
+
+        # N = 1 camera
+        camera_intrinsics = K4.unsqueeze(0).to("cuda:0")
+
+        camera2lidar = camera2lidar.unsqueeze(0).unsqueeze(0).to("cuda:0")
+
+        camera2ego=camera2lidar.clone()
+        lidar2ego=torch.eye(4).to("cuda:0")
+        img_aug_matrix = torch.eye(
+                4,
+                dtype=torch.float32,
+            ).to("cuda:0")
+        lidar_aug_matrix = torch.eye(
+                4,
+                dtype=torch.float32,
+        ).to("cuda:0")
+
+        batch = {"image":img,
+                 "points":pcd,
+                 "camera2lidar":camera2lidar,
+                 "camera_intrinsics":camera_intrinsics,
+                 "camera2ego":camera2ego,
+                 "lidar2ego":lidar2ego,
+                 "img_aug_matrix":img_aug_matrix,
+                 "lidar_aug_matrix":lidar_aug_matrix}
+
+        yield batch
+
+
+import numpy as np
+import torch
+
+def read_npy(path_npy):
+    """Read point cloud as [N, 4]: x, y, z, intensity."""
+    pc = np.load(path_npy, allow_pickle=False).reshape(-1)
+
+    points = np.stack(
+        [
+            pc["x"],
+            pc["y"],
+            pc["z"],
+            pc["intensity"] / 256.0,
+        ],
+        axis=1,
+    ).astype(np.float32)
+
+    # Remove points containing NaN or infinity.
+    valid = np.isfinite(points).all(axis=1)
+
+    points = points[valid]
+
+
+    point_times = pc["time"][valid].copy()
+
+    # Example: 000000001_1791465486989885208.npy
+    timestamp_ns = int(Path(path_npy).stem.rsplit("_", 1)[1])
+
+
+    return torch.from_numpy(points).to("cuda:0")
+
+
+from pathlib import Path
+import numpy as np
+
+def read_npy_image(path_npy):
+    image = np.load(path_npy, allow_pickle=False)
+    timestamp_ns = int(Path(path_npy).stem.rsplit("_", 1)[1])
+
+    return torch.from_numpy(image).permute(2, 0, 1).float().unsqueeze(0).to("cuda:0")
+
+import json
+import numpy as np
+from scipy.spatial.transform import Rotation
+
+def get_calib():
+    camera_distortion = []
+    calibration_file = "/mnt/e/dev/hidden/data/iccs_collaborative_dataset/dataset/reconstructed/calib.json"
+    with open(calibration_file, "r") as f:
+        calib = json.load(f)
+
+    fx, fy, cx, cy = calib["camera"]["intrinsics"]
+
+    K = np.array([
+        [fx, 0,  cx],
+        [0,  fy, cy],
+        [0,  0,  1],
+    ], dtype=np.float64)
+
+    distortion = np.array(
+        calib["camera"]["distortion_coeffs"],
+        dtype=np.float64,
+    )
+
+    values = np.array(calib["results"]["T_lidar_camera"])
+
+    translation = values[:3]
+    quaternion = values[3:]  # scipy expects [qx, qy, qz, qw]
+
+    camera_to_lidar = np.eye(4, dtype=np.float64)
+    camera_to_lidar[:3, :3] = Rotation.from_quat(quaternion).as_matrix()
+    camera_to_lidar[:3, 3] = translation
+
+    lidar_to_camera = np.linalg.inv(camera_to_lidar)
+
+    print("Camera intrinsic:\n", K)
+    print("Camera to LiDAR:\n", camera_to_lidar)
+    print("LiDAR to camera:\n", lidar_to_camera)
+
+    return K , torch.tensor(camera_to_lidar,dtype=torch.float32,)
+
+
+if __name__=="__main__":
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # mylighnting_module=BEVFusionLightningModule()
+
+    model = BEVFusionLightningModule.load_from_checkpoint(
+        "/mnt/e/dev/hidden/projects/detection_dairv2x/checkpoints/epoch=epoch=149-val=val=0.0000-name=try_8.ckpt",
+        map_location="cpu",
+        # Add constructor arguments here if not saved in the checkpoint.
+        flag=False,
+        epoch_viz=None,
+        score_threshold=0.1,
+        thresh_iou=0.5,
+        epoch_viz_step=None,
+    )
+    model = model.to(device)
+    model.eval()
+
+    metres_per_cell=1
+    x_min=-150
+    y_min=-150
+
+    with torch.no_grad():
+        for idx,batch in tqdm(enumerate(inference_loader())):
+
+            images = batch["image"].to(device)
+
+            # Assumes one point-cloud tensor per sample.
+            points = [pc.to(device) for pc in batch["points"]]
+
+            camera2lidar=batch["camera2lidar"]
+            camera2ego=batch["camera2ego"]
+            camera_intrinsics=batch["camera_intrinsics"]
+            lidar2ego=batch["lidar2ego"]
+            img_aug_matrix=batch["img_aug_matrix"]
+            lidar_aug_matrix=batch["lidar_aug_matrix"]
+
+            # Match this call to your model's forward() signature.
+            predictions = model.model(img=images,points=points,
+                                      camera_intrinsics=camera_intrinsics,
+                                      camera2lidar=camera2lidar,
+                                      camera2ego=camera2ego,
+                                      lidar2ego=lidar2ego,
+                                      img_aug_matrix=img_aug_matrix,
+                                      lidar_aug_matrix=lidar_aug_matrix,)
+
+            results = get_decoded_bbox_from_pred(
+                predictions,
+                score_threshold=0.1,
+                metres_per_cell=metres_per_cell,
+                x_min=x_min,
+                y_min=y_min,
+            )
+
+            # Apply your existing NMS here if decoding does not include it.
+
+            for i, result in enumerate(results):
+                boxes = result["boxes"].detach().cpu().numpy()
+                scores = result["scores"].detach().cpu().numpy()
+                labels = result["labels"].detach().cpu().numpy()
+
+                boxes_postprocessed = nms_boxes(boxes)
+
+
+            viz_boxes(  predictions ,
+                        targets=None,
+                        points=points,
+                        score_threshold=0.1,
+                        metres_per_cell=metres_per_cell,
+                        x_min=x_min,
+                        y_min=y_min,
+                        save_path=None,
+                        desc=None)
+                                # Project boxes into the original camera image and save.

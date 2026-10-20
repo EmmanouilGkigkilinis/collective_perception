@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 """Stream ROS 2 MCAP recordings into NumPy, compressed images and JSON.
 
@@ -16,7 +15,7 @@ import hashlib
 import json
 import re
 from pathlib import Path
-
+import cv2
 import numpy as np
 from mcap.reader import make_reader
 from mcap_ros2.decoder import DecoderFactory
@@ -43,6 +42,25 @@ def pointcloud_array(msg):
 
 
 def image_array(msg):
+    """Decode images; convert bayer_rggb8 to RGB, preserve other encodings."""
+
+    if msg.encoding.lower() == 'bayer_rggb8':
+        if msg.step < msg.width:
+            raise ValueError('Invalid Bayer image step')
+
+        # One byte per pixel; respect padding at the end of each row.
+        bayer = np.ndarray(
+            shape=(msg.height, msg.width),
+            dtype=np.uint8,
+            buffer=bytes(msg.data),
+            strides=(msg.step, 1),
+        )
+
+        return cv2.cvtColor(
+            np.ascontiguousarray(bayer),
+            cv2.COLOR_BayerBG2RGB,
+        )
+
     """Keep original channel order, precision and endianness (no normalization)."""
     known = {'rgb8': ('u1', 3), 'bgr8': ('u1', 3),
              'rgba8': ('u1', 4), 'bgra8': ('u1', 4),
@@ -90,8 +108,19 @@ def save_message(schema_name, msg, stem):
         details = {'is_dense': msg.is_dense}
     elif schema_name == 'sensor_msgs/msg/Image':
         path = stem.with_suffix('.npy')
-        np.save(path, image_array(msg), allow_pickle=False)
-        details = {'encoding': msg.encoding}
+        arr = image_array(msg)
+        np.save(path, arr, allow_pickle=False)
+
+        details = {
+            'encoding': (
+                'rgb8'
+                if msg.encoding.lower() == 'bayer_rggb8'
+                else msg.encoding
+            ),
+            'source_encoding': msg.encoding,
+            'shape': list(arr.shape),
+            'dtype': str(arr.dtype),
+        }
     elif schema_name == 'sensor_msgs/msg/CompressedImage':
         payload = bytes(msg.data)
         # Signature check avoids mislabeling compressedDepth payloads as PNG.
@@ -158,3 +187,4 @@ if __name__ == '__main__':
 
 
 
+# E:\dev\hidden\data\iccs_collaborative_dataset

@@ -29,6 +29,6 @@ calib_path: /mnt/e/dev/hidden/data/dairv2x/cooperative-vehicle-infrastructure/ve
 device: cuda
 
 #visualization
-flag: True
+flag: False
 epoch_viz: 14
 epoch_viz_step: 20

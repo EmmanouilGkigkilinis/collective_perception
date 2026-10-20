@@ -101,7 +101,7 @@ class Detection3DMetrics(Metric):
         # IMPORTANT:
                 # Rotated BEV NMS, independently per sample and class.
         # Separate from self.thresh_iou, which controls GT matching.
-        pred = nms_boxes(results)
+        results_postprocessed = nms_boxes(results=results)
         # Without NMS, duplicate predictions are evaluated as extra detections
         # and can become false positives.
 
@@ -110,14 +110,14 @@ class Detection3DMetrics(Metric):
         gt_batch = self.get_gt_stacks_from_ds(targets)
 
         # Prevent zip() from silently dropping unmatched batch entries.
-        if len(results) != len(gt_batch):
+        if len(results_postprocessed) != len(gt_batch):
             raise ValueError("Prediction and GT batch sizes differ")
 
         # Use the device on which this metric's registered state lives.
         device = self.num_gt.device
 
         # Match predictions only against GT from the SAME sample.
-        for pred, gt in zip(results, gt_batch):
+        for pred, gt in zip(results_postprocessed, gt_batch):
 
             # Predicted metric boxes: [N, 7].
             # Column order: [x, y, z_center, length, width, height, yaw].
@@ -227,6 +227,7 @@ class Detection3DMetrics(Metric):
 
         # Output dictionary and list of APs included in the class mean.
         metrics = {}
+        metrics_2 = {}
         class_aps = []
 
         class_precisions=[]
@@ -254,6 +255,11 @@ class Detection3DMetrics(Metric):
             # Running TP and FP counts as we include lower-scoring predictions.
             # Example TP flags: [1, 0, 1] -> cumulative TP: [1, 1, 2].
             cumulative_tp = rows[:, 1].cumsum(dim=0)
+            metrics[f"TP_class_{c}"] = (
+                cumulative_tp[-1]
+                if cumulative_tp.numel() > 0
+                else self.num_gt.new_tensor(0).float()
+            )
             cumulative_fp = (1.0 - rows[:, 1]).cumsum(dim=0)
 
             # Recall: fraction of all GT objects recovered so far.
@@ -296,13 +302,13 @@ class Detection3DMetrics(Metric):
             metrics[f"AP_class_{c}"] = ap
             class_aps.append(ap)
 
-            class_precisions.append(precision)
-            class_recalls.append(recall)
-            class_cum_tp.append(cumulative_tp)
-            class_cum_fp.append(cumulative_fp)
-            metrics[f"recalls_class_{c}"]=class_recalls
-            metrics[f"cum_tp_class_{c}"]=class_cum_tp
-            metrics[f"cum_fp_class"]
+            # class_precisions.append(precision)
+            # class_recalls.append(recall)
+            # class_cum_tp.append(cumulative_tp)
+            # class_cum_fp.append(cumulative_fp)
+            # metrics_2[f"recalls_class_{c}"] = class_recalls[-1]  
+            # metrics_2[f"cum_tp_class_{c}"] = class_cum_tp[-1]
+            # metrics_2[f"cum_fp_class_{c}"] = class_cum_tp[-1]
 
         # mAP here means the mean across classes at ONE IoU threshold.
         metrics["mAP"] = (
@@ -310,9 +316,9 @@ class Detection3DMetrics(Metric):
             if class_aps
             else records.new_tensor(float("nan"))
         )
-        metrics["precision"] = precision
+        # metrics["precision"] = precision
 
-        return metrics
+        return metrics,metrics_2
 
     def get_gt_stacks_from_ds(self, boxes):
         """

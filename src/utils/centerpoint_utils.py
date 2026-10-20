@@ -4,7 +4,7 @@ import torch
 from mmcv.ops import box_iou_rotated, nms_rotated
 from typing import List, Tuple
 
-def nms_boxes(self, results):
+def nms_boxes( results):
         nms_iou_threshold = 0.2
 
         for pred in results:
@@ -49,7 +49,7 @@ def nms_boxes(self, results):
             pred["scores"] = scores[keep]
             pred["labels"] = labels[keep]
 
-        return pred
+        return results
 
 
 def encode_gt_batches(targets_metric:List, 

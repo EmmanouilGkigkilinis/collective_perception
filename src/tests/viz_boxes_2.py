@@ -6,7 +6,6 @@ from matplotlib.lines import Line2D
 
 from src.utils.centerpoint_utils import get_decoded_bbox_from_pred
 
-
 def to_numpy(value):
     if torch.is_tensor(value):
         return value.detach().cpu().numpy()

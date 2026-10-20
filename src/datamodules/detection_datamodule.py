@@ -3,6 +3,8 @@ import os
 import numpy as np
 from sklearn.model_selection import train_test_split
 import torch
+import time
+
 import pytorch_lightning as pl
 import logging
 from pathlib import Path
@@ -97,7 +99,7 @@ class DAIRV2X_DATASET(Dataset):
 
         Reads also the img, pcd from disk one at a time 
         """
-
+        start = time.perf_counter()
         sample = self.database[idx]
         img = sample["img"]
         points= sample["points"]
@@ -134,7 +136,10 @@ class DAIRV2X_DATASET(Dataset):
          img_aug_matrix, 
          lidar_aug_matrix)= self.read_calib_path(frame_idx)
         
-        
+        elapsed = time.perf_counter() - start
+        logging.info(f"Elapsed time in data fetch {elapsed}")
+        print(f"Elapsed time in data fetch {elapsed}")
+
         return (img, 
                 points , 
                 gt , 
@@ -231,37 +236,6 @@ class DAIRV2X_DATASET(Dataset):
                img_aug_matrix,
                lidar_aug_matrix)
 
-    
-    # def parse_calibration_files(self, frame_idx):
-    #     """
-    #     read vehicle calibration instrinsics and extrinsics 
-    #     """
-
-    #     #instrinics
-    #     with open(self.path_to_veh_calib / "camera_intrinsic" /frame_idx+"json","r") as f:
-    #         data=json.load(f)
-    #     d=data["cam_D"] #distortion
-    #     k=data["cam_K"] #camera coeffs
-
-    #     #extrinsics 
-    #     data=[]
-    #     with open(self.path_to_veh_calib / "lidar_to_camera" /frame_idx+"json","r") as f:
-    #         data=json.load(f)
-
-    #     t_l_c = data["translation"]
-    #     r_l_c = data["rotation"]
-
-    #     with open(self.path_to_veh_calib / "lidar_to_novatel" /frame_idx+"json","r") as f:
-    #         data=json.load(f)
-
-    #     t_l_n = data["translation"]
-    #     r_l_n = data["rotation"]
-
-    #     with open(self.path_to_veh_calib / "lidar_to_novatel" /frame_idx+"json","r") as f:
-    #         data=json.load(f)
-
-    #     t_n_w = data["translation"]
-    #     r_n_w = data["rotation"]
 
 
 
@@ -292,7 +266,7 @@ class DAIRV2X_DATASET(Dataset):
             if not (torch.isfinite(dims).all() and (dims>0).all()):
                 raise ValueError("Found invalid sized object of type{} and bbox{} and size {}, at label file {}".format(obj_id,(obj_dict["3d_location"]["x"] , 
                                                 obj_dict["3d_location"]["y"]),size, osp.join(self.path_to_gt_labels,label_camera) ))
-            
+             
 
             #find actual statistics
             self.statistics_classes[obj_dict["type"]] = self.statistics_classes[obj_dict["type"]]+1
