@@ -1,0 +1,6 @@
+# @package _global_
+
+task: test
+batch_size: 1
+ckpt_path: ???  # Required: supply a checkpoint when testing
+

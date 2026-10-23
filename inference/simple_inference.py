@@ -15,14 +15,13 @@ def inference_loader():
         points,imaage,camera_intrinsics,camera2lidar,camera2ego,lidar2ego,img_aug_matrix
     """
 
-    image_root=Path("/mnt/e/dev/hidden/data/iccs_collaborative_dataset/dataset/reconstructed/recording_0000/images/")
-    pcd_root=Path("/mnt/e/dev/hidden/data/iccs_collaborative_dataset/dataset/reconstructed/recording_0000/velo/")
+    image_root=Path("/mnt/e/dev/hidden/data/iccs_collaborative_dataset/data__livox_new/reconstructed/recording_0000/images/")
+    pcd_root=Path("/mnt/e/dev/hidden/data/iccs_collaborative_dataset/data__livox_new/reconstructed/recording_0000/velo/")
 
     for img_path,pcd_path in zip(image_root.rglob("*.npy"), pcd_root.rglob("*.npy")):
 
         print(f"Reading image at path {img_path}")
         print(f"Reading pcd at path {pcd_path}")
-
 
         pcd=read_npy(pcd_path)
         img=read_npy_image(img_path)
@@ -32,6 +31,7 @@ def inference_loader():
             camera_intrinsics,
             dtype=torch.float32,
         ).reshape(3, 3)
+
         # BEVFusion uses homogeneous 4x4 calibration matrices
         K4 = torch.eye(4, dtype=torch.float32)
         K4[:3, :3] = K
@@ -86,12 +86,12 @@ def read_npy(path_npy):
 
     points = points[valid]
 
-
-    point_times = pc["time"][valid].copy()
+    # point_times = pc["time"][valid].copy()
 
     # Example: 000000001_1791465486989885208.npy
-    timestamp_ns = int(Path(path_npy).stem.rsplit("_", 1)[1])
+    # timestamp_ns = int(Path(path_npy).stem.rsplit("_", 1)[1])
 
+    print(f"point cloud is {pc}")
 
     return torch.from_numpy(points).to("cuda:0")
 
@@ -101,7 +101,9 @@ import numpy as np
 
 def read_npy_image(path_npy):
     image = np.load(path_npy, allow_pickle=False)
-    timestamp_ns = int(Path(path_npy).stem.rsplit("_", 1)[1])
+    # timestamp_ns = int(Path(path_npy).stem.rsplit("_", 1)[1])
+
+    print(f"Image shape is {image.shape}")
 
     return torch.from_numpy(image).permute(2, 0, 1).float().unsqueeze(0).to("cuda:0")
 
@@ -121,7 +123,7 @@ def get_calib():
         [fx, 0,  cx],
         [0,  fy, cy],
         [0,  0,  1],
-    ], dtype=np.float64)
+    ], dtype=np.float64)  
 
     distortion = np.array(
         calib["camera"]["distortion_coeffs"],
@@ -137,7 +139,9 @@ def get_calib():
     camera_to_lidar[:3, :3] = Rotation.from_quat(quaternion).as_matrix()
     camera_to_lidar[:3, 3] = translation
 
-    lidar_to_camera = np.linalg.inv(camera_to_lidar)
+    lidar_to_camera=camera_to_lidar
+
+    camera_to_lidar = np.linalg.inv(lidar_to_camera)
 
     print("Camera intrinsic:\n", K)
     print("Camera to LiDAR:\n", camera_to_lidar)
@@ -145,14 +149,17 @@ def get_calib():
 
     return K , torch.tensor(camera_to_lidar,dtype=torch.float32,)
 
-
 if __name__=="__main__":
+    class_names=["Car","Truck","Van","Bus","Pedestrian","Cyclist","Tricyclist",     "Motorcyclist","Barrowlist","Trafficcone"]
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # mylighnting_module=BEVFusionLightningModule()
 
+    ckpt="/mnt/e/dev/hidden/projects/detection_dairv2x/checkpoints/epoch=epoch=09-val=val=0.0000-name=full_train_10.ckpt"
+
     model = BEVFusionLightningModule.load_from_checkpoint(
-        "/mnt/e/dev/hidden/projects/detection_dairv2x/checkpoints/epoch=epoch=149-val=val=0.0000-name=try_8.ckpt",
+        ckpt,
         map_location="cpu",
         # Add constructor arguments here if not saved in the checkpoint.
         flag=False,
@@ -164,17 +171,32 @@ if __name__=="__main__":
     model = model.to(device)
     model.eval()
 
-    metres_per_cell=1
-    x_min=-150
-    y_min=-150
+    metres_per_cell=2
+    x_min=-20
+    y_min=-20
 
     with torch.no_grad():
         for idx,batch in tqdm(enumerate(inference_loader())):
 
             images = batch["image"].to(device)
+            import torch.nn.functional as F
+
+            # images: [B, 3, H, W]
+            original_h, original_w = images.shape[-2:]
+
+            # Use the exact image_size from your training configuration.
+            train_h, train_w = (1080,1920)
+
+            images = F.interpolate(
+                images,
+                size=(train_h, train_w),
+                mode="bilinear",
+                align_corners=False,
+            )
 
             # Assumes one point-cloud tensor per sample.
-            points = [pc.to(device) for pc in batch["points"]]
+            # points = [pc.to(device) for pc in batch["points"]]
+            points = batch["points"].unsqueeze(0).to(device)
 
             camera2lidar=batch["camera2lidar"]
             camera2ego=batch["camera2ego"]
@@ -202,21 +224,37 @@ if __name__=="__main__":
 
             # Apply your existing NMS here if decoding does not include it.
 
-            for i, result in enumerate(results):
+            nms_out = nms_boxes(results)
+
+            # print(f"total results bboxc output is: {nms_out['bboxes'].shape}")
+
+            labels_tot=[]
+            for i, result in enumerate(nms_out):    
                 boxes = result["boxes"].detach().cpu().numpy()
                 scores = result["scores"].detach().cpu().numpy()
                 labels = result["labels"].detach().cpu().numpy()
 
-                boxes_postprocessed = nms_boxes(boxes)
+
+                labels_tot.append(labels)
+                print(f"num boxes results {i}:{boxes.shape}")
+                for j in range(len(class_names)):
+                    print(f"class results {j}:{class_names[labels[i]]}")
+
+            pedestrians=[]
+            motorcyclists=[]
+            vehicles=[]
+            # for i in labels_tot:
+            #     if i==
 
 
             viz_boxes(  predictions ,
                         targets=None,
-                        points=points,
+                        pc=points,
+                        # points=points,
                         score_threshold=0.1,
                         metres_per_cell=metres_per_cell,
                         x_min=x_min,
                         y_min=y_min,
-                        save_path=None,
-                        desc=None)
+                        save_path="/mnt/e/dev/hidden/projects/detection_dairv2x/logging/io_iccs/",
+                        desc="iccs_inference")
                                 # Project boxes into the original camera image and save.

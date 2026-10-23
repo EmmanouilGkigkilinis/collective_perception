@@ -77,7 +77,7 @@ def main(cfg:DictConfig):
             monitor=cfg.modelcheckpoint_monitor,
             mode="min",
             save_top_k=-1,          # save all checkpoints
-            every_n_epochs=25,
+            every_n_epochs=10,
             save_on_train_epoch_end=False,
             save_last=True,
          )

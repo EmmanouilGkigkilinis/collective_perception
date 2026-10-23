@@ -10,6 +10,7 @@ from src.utils.losses.losses import detection_3d_loss
 from src.utils.metrics.metrics_3d_detection import Detection3DMetrics
 from src.tests.viz_boxes import viz_boxes
 from src.tests.viz_boxes_2 import viz_boxes as viz_boxes_2
+from torchmetrics import MeanMetric
 
 logging.getLogger(__file__)
 
@@ -89,11 +90,29 @@ class BEVFusionLightningModule(pl.LightningModule):
         self.val_metrics = Detection3DMetrics(**metric_kwargs)
         self.val_batch_metrics=Detection3DMetrics(**metric_kwargs)
         self.train_metrics = Detection3DMetrics(**metric_kwargs)
+        self.test_metrics=Detection3DMetrics(**metric_kwargs)
+
+        self.train_loss_epoch = MeanMetric()
+        self.val_loss_epoch = MeanMetric()
 
     def on_train_epoch_start(self):
             print(f"\nEpoch {self.current_epoch + 1}/{self.trainer.max_epochs}")
             logging.info(f"\nEpoch {self.current_epoch + 1}/{self.trainer.max_epochs}")
             
+
+    def on_train_epoch_end(self):
+        # Your existing computation of the full-epoch metric
+        train_metric = self.train_loss_epoch.compute()
+
+        if self.trainer.is_global_zero:
+            self.logger.experiment.add_scalar(
+                "epoch/train_loss_total",
+                train_metric.item(),
+                global_step=self.current_epoch + 1,
+            )
+
+        self.train_loss_epoch.reset()
+
   
     def training_step(self, batch, batch_idx):
         """
@@ -101,7 +120,6 @@ class BEVFusionLightningModule(pl.LightningModule):
         """
         # batch=batch.to(self.device)
         start = time.perf_counter()
-
 
         logging.info("Forward pass ")
         img = batch["image"]  #fix this for batches ... 
@@ -178,12 +196,17 @@ class BEVFusionLightningModule(pl.LightningModule):
         size_loss, \
         rots_loss, = self.loss(outputs, targets_centerpoint)
 
+        self.train_loss_metric.update(
+            final_loss.detach(),
+        )
+
+
         self.log(
             "total_train_loss",
             final_loss,
             prog_bar=True,
             on_step=True,
-            on_epoch=True,
+            on_epoch=False,
             batch_size=self._get_batch_size(batch),
         )
 
@@ -192,7 +215,7 @@ class BEVFusionLightningModule(pl.LightningModule):
             heatmap_loss,
             prog_bar=True,
             on_step=True,
-            on_epoch=True,
+            on_epoch=False,
             batch_size=self._get_batch_size(batch),
         )
 
@@ -201,7 +224,7 @@ class BEVFusionLightningModule(pl.LightningModule):
             offset_loss,
             prog_bar=True,
             on_step=True,
-            on_epoch=True,
+            on_epoch=False,
             batch_size=self._get_batch_size(batch),
         )
 
@@ -210,7 +233,7 @@ class BEVFusionLightningModule(pl.LightningModule):
             height_loss,
             prog_bar=True,
             on_step=True,
-            on_epoch=True,
+            on_epoch=False,
             batch_size=self._get_batch_size(batch),
         )
 
@@ -219,7 +242,7 @@ class BEVFusionLightningModule(pl.LightningModule):
             size_loss,
             prog_bar=True,
             on_step=True,
-            on_epoch=True,
+            on_epoch=False,
             batch_size=self._get_batch_size(batch),
         )
 
@@ -228,21 +251,13 @@ class BEVFusionLightningModule(pl.LightningModule):
             rots_loss,
             prog_bar=True,
             on_step=True,
-            on_epoch=True,
+            on_epoch=False,
             batch_size=self._get_batch_size(batch),
         )
 
         start4=time.perf_counter()
 
-        # for name, value in outputs.items():   #logs individual losses, step and epoch losses 
-        #     self.log(
-        #         f"train/{name}",
-        #         value,
-        #         on_step=False,
-        #         on_epoch=True,
-        #         batch_size=self._get_batch_size(batch),
-        #     )
-
+        #map metrics
         self.train_metrics.reset()
         self.train_metrics.update(outputs, targets_metric)
         train_metrics_values, train_metrics_values_2 = self.train_metrics.compute()
@@ -330,6 +345,11 @@ class BEVFusionLightningModule(pl.LightningModule):
         rots_loss, = self.loss(outputs, targets_centerpoint)
 
         logging.info("Epoch {} , final total loss after validation is {}".format(self.current_epoch,final_loss))
+
+        self.val_loss_epoch.update(
+            final_loss.detach(),
+        )
+
 
         self.val_metrics.update(outputs, targets)
 
@@ -459,6 +479,16 @@ class BEVFusionLightningModule(pl.LightningModule):
             f"val_3d_AP50/{name}": value
             for name, value in metrics.items()
         })
+        epoch_loss = self.val_loss_metric.compute()
+
+        if self.trainer.is_global_zero:
+            self.logger.experiment.add_scalar(
+                "epoch/val_loss",
+                epoch_loss.item(),
+                global_step=self.current_epoch + 1,
+            )
+
+        self.val_loss_metric.reset()
 
         # Release accumulated records and reset GT counts.
         self.val_metrics.reset()
@@ -477,13 +507,98 @@ class BEVFusionLightningModule(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
 
-        predictions = self.model(
-            batch,
-            return_loss=False,
+        """
+        validation 
+        """
+        logging.info("Forward validation pass ")
+        img = batch["image"]  #fix this for batches ... 
+        points = batch["points"]
+        targets = batch["gt_boxes"]
+
+        targets_centerpoint = encode_gt_batches(targets_metric=targets ,
+                                                BEV_RANGE_HORZ=self.output_bev_range_W,
+                                                BEV_RANGE_HORZ_MIN=self.output_bev_range_xmin,
+                                                BEV_RANGE_VERT=self.output_bev_range_H,
+                                                BEV_RANGE_VERT_MIN=self.output_bev_range_ymin,
+                                                metres_per_cell=self.meters_per_cell,
+                                                NUM_CLASSES=self.num_classes,
+                                                device=self.device)
+        
+
+        #calibration parameters
+        camera_intrinsics = batch["camera_intrinsics"]
+        camera2lidar=batch["camera2lidar"]
+        camera2ego=batch["camera2ego"]
+        lidar2ego=batch["lidar2ego"]
+        img_aug_matrix=batch["img_aug_matrix"]
+        lidar_aug_matrix=batch["lidar_aug_matrix"]
+        # frame_idx = batch["frame_idx"]
+
+        outputs = self.model(  #lss model forward
+            img=img,
+            points=points , 
+            camera_intrinsics = camera_intrinsics, 
+            camera2lidar=camera2lidar , 
+            camera2ego=camera2ego, 
+            lidar2ego=lidar2ego, 
+            img_aug_matrix=img_aug_matrix, 
+            lidar_aug_matrix = lidar_aug_matrix
         )
 
-        return predictions
+        # loss = sum(outputs.values())
+        # final_loss,\
+        # heatmap_loss,\
+        # offset_loss, \
+        # height_loss, \
+        # size_loss, \
+        # rots_loss, = self.loss(outputs, targets_centerpoint)
 
+        # logging.info("Epoch {} , final total loss after validation is {}".format(self.current_epoch,final_loss))
+
+        # self.val_loss_epoch.update(
+        #     final_loss.detach(),
+        # )
+
+
+        self.test_metrics.update(outputs, targets)
+
+
+        # if self.flag and self.current_epoch==self.epoch_viz and self.epoch_vize_step==None:
+        #     viz_boxes(predictions = outputs , 
+        #                 targets = batch,
+        #                 pc = points,
+        #                 score_threshold = self.score_threshold,
+        #                 metres_per_cell = self.meters_per_cell,
+        #                 x_min = self.output_bev_range_xmin,
+        #                 y_min = self.output_bev_range_ymin,desc="{}".format(self.current_epoch),save_path=None)  #vizualize pred
+        # elif self.flag and (self.epoch_viz_step is not None) and (self.current_epoch %  self.epoch_viz_step  )==0 :
+        #     print("printing validation boxes")
+        #     viz_boxes(predictions = outputs ,           
+        #                 targets = batch,
+        #                 pc = points,
+        #                 score_threshold = self.score_threshold,
+        #                 metres_per_cell = self.meters_per_cell,
+        #                 x_min = self.output_bev_range_xmin,
+        #                 y_min = self.output_bev_range_ymin,
+        #                 desc="validation-{}".format(self.current_epoch),
+        #                 save_path="/mnt/e/dev/hidden/projects/detection_dairv2x/logging/io/"
+        #                 )  #vizualize pred
+
+
+
+        # Diagnostic: evaluate exactly these validation predictions independently.
+        self.test_batch_metrics.reset()
+        self.test_batch_metrics.update(outputs, targets)
+        batch_metrics , batch_metrics_2 = self.test_batch_metrics.compute()
+        self.log_dict({
+            f"test_3d_AP50_batch/{name}": value
+            for name, value in batch_metrics.items()
+        })
+
+        self.test_batch_metrics.reset()
+
+
+        return outputs
 
     def predict_step(self, batch, batch_idx):
 

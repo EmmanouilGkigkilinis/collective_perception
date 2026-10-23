@@ -1,7 +1,11 @@
 import torch 
 import logging
+from torchmetrics import Metric
 
 logging.getLogger(__file__)
+
+# class 3d_loss_metric()
+
 
 class detection_3d_loss(torch.nn.Module):
     def __init__(self , device):
@@ -11,7 +15,10 @@ class detection_3d_loss(torch.nn.Module):
     # def get_current_losses(self):
     #     return
 
-    def forward(self, pred , target, print_losses=True):
+    def forward(self, 
+                pred , 
+                target, 
+                print_losses=True):
         mask = target["target_mask"]
 
         heatmap_loss = self.heatmap_loss(pred["heatmap"] , target["target_heatmap"] )
@@ -34,7 +41,11 @@ class detection_3d_loss(torch.nn.Module):
 
     
     def regression_loss(self,pred, target, mask):
-        valid = mask[:, 0].to(self.device,dtype=torch.bool)  # [B, H, W]
+        """
+        loss for size,offset,rotation,
+        """
+        valid = mask[:, 0].to(self.device,
+                              dtype=torch.bool)  # [B, H, W]
 
         pred = pred.permute(0, 2, 3, 1)      # [B, H, W, channels]
         target = target.permute(0, 2, 3, 1)
