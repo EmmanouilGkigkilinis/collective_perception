@@ -1,4 +1,5 @@
 from math import floor
+import sys
 from pyparsing import Optional
 import torch
 from mmcv.ops import box_iou_rotated, nms_rotated
@@ -359,6 +360,17 @@ def get_decoded_bbox_from_pred(predictions,
             [x, y, z,  l, w , h, yaw],
             dim=-1,
         )  # [N, 7], including [0, 7] when no candidates survive
+
+        # if x.numel() > 0:
+        #     print("Heatmap shape:", predictions["heatmap"].shape)
+        #     print("Grid:", x_min, y_min, metres_per_cell)
+        #     print("cx range:", cx.min().item(), cx.max().item())
+        #     print("cy range:", cy.min().item(), cy.max().item())
+        #     print("dx range:", dx.min().item(), dx.max().item())
+        #     print("dy range:", dy.min().item(), dy.max().item())
+        #     print("x metres:", x.min().item(), x.max().item())
+        #     print("y metres:", y.min().item(), y.max().item())
+        #     sys.exit(0)
 
 
         #results are actual predicted boxes decoded in metres, with scores (heatmap) 

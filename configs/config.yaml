@@ -21,6 +21,6 @@ defaults:
 
 experiment_name: default
 batch_size: 1
-modelcheckpoint_monitor: null
+modelcheckpoint_monitor: total_val_loss
 seed: 42
 ckpt_path: null

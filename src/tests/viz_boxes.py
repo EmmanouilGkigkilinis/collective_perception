@@ -19,6 +19,9 @@ def viz_boxes(predictions ,
     """
     visualize 2d boxes from prediction and targert
     """
+    class_names=["Car","Truck","Van","Bus","Pedestrian","Cyclist","Tricyclist",     "Motorcyclist","Barrowlist","Trafficcone"]
+
+
     B = predictions["heatmap"].shape[0]
     results = get_decoded_bbox_from_pred(predictions,
                                          score_threshold=score_threshold,metres_per_cell=metres_per_cell,
@@ -45,14 +48,16 @@ def viz_boxes(predictions ,
             pc = pc[batch, :, :3].detach().cpu().numpy()    
             boxes = results[batch]["boxes"].detach().cpu().tolist()
 
+            labels = results[batch]["labels"].detach().cpu().tolist()
+
             if 1:
-                for box in boxes:  #multiple box
+                for box,label in zip(boxes,labels):  #multiple box
                     x_p, y_p, z_p , l_p , w_p, h_p, yaw_p = box
                     
                     rectangle=Rectangle(  #prediction
-                            ( x_p - w_p / 2,l_p - l_p / 2),
-                            w_p,
+                            ( x_p - w_p / 2,y_p - l_p / 2),
                             l_p,
+                            w_p,
                             fill=False,
                             edgecolor="red",
                             linewidth=2,
@@ -62,6 +67,29 @@ def viz_boxes(predictions ,
                         Affine2D().rotate_around(x_p, y_p, yaw_p) + ax.transData
                     )
                     ax.add_patch(rectangle)
+
+                    # Highest y-coordinate of the rotated rectangle.
+                    top_y = (
+                        y_p
+                        + abs(np.sin(yaw_p)) * w_p / 2
+                        + abs(np.cos(yaw_p)) * l_p / 2
+                    )
+
+                    ax.annotate(
+                        class_names[label],              # Or class_names[label]
+                        xy=(x_p, top_y),
+                        xytext=(0, 4),           # Offset above the box in points
+                        textcoords="offset points",
+                        ha="center",
+                        va="bottom",
+                        fontsize=8,
+                        color="white",
+                        bbox=dict(
+                            boxstyle="round,pad=0.2",
+                            facecolor="red",
+                            edgecolor="none",
+                            alpha=0.8,
+                        ),)
             
             if targets is not None:
                 for gt_box in targets["gt_boxes"][batch]:
@@ -92,27 +120,28 @@ def viz_boxes(predictions ,
             print("XYZ max:", pc[:, :3].max(axis=0))
             print("All finite:", np.isfinite(pc[:, :3]).all())
             
-            if 1:
-                ax.scatter( pc[:,0] , 
-                            pc[:,1], 
-                            c="blue",
-                            cmap="viridis",
-                            s=0.5,
-                            alpha=0.5, 
-                            zorder=1 )
+        if 1:
+            print(f"point cloud sdhape {pc.shape}")
+            ax.scatter( pc[:,0] , 
+                        pc[:,1], 
+                        c="blue",
+                        cmap="viridis",
+                        s=0.5,
+                        alpha=0.5, 
+                        zorder=1 )
 
-            ax.set(xlabel="x", 
-                   ylabel="y")
-            
-            ax.grid(True)
-            
-            print("saving plt")
-            plt.savefig(os.path.join(save_path + desc+".png"),
-                        dpi=300,
-                        bbox_inches="tight")
-            # plt.savefig(os.path.join(save_path + desc+".svg"),
-            #             dpi=300,
-            #             bbox_inches="tight")
-            plt.close(fig)
+        ax.set(xlabel="x", 
+                ylabel="y")
+        
+        ax.grid(True)
+        
+        print("saving plt")
+        plt.savefig(os.path.join(save_path + desc+".png"),
+                    dpi=300,
+                    bbox_inches="tight")
+        # plt.savefig(os.path.join(save_path + desc+".svg"),
+        #             dpi=300,
+        #             bbox_inches="tight")
+        plt.close(fig)
 
         

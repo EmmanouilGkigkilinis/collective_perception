@@ -53,14 +53,13 @@ def main(cfg:DictConfig):
                   
     model = instantiate(cfg.model)   
 
-    success = datamodule.setup(stage="fit")
+    success = datamodule.setup(stage="test")
 
     hparams = OmegaConf.to_container(
         cfg,
         resolve=True,
         throw_on_missing=True
     )
-
 
     logger = instantiate(cfg.logger)        #tensorboard logger
     logger.log_hyperparams(hparams)

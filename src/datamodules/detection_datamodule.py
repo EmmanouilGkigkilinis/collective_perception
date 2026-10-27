@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import numpy as np
 from sklearn.model_selection import train_test_split
 import torch
@@ -485,7 +486,11 @@ class DAIRV2XDataModule(pl.LightningDataModule):
 
         train_splits = [x for x in splits["train"]]
         val_splits = [x for x in splits["val"]]
-        test_splits = [x for x in splits["test"]]
+        test_splits = [x for x in splits["val"]]
+
+        assert len(test_splits)>0
+        # print(len(test_splits))
+        # sys.exit(0)
 
         return train_splits,val_splits,test_splits
 
@@ -566,7 +571,7 @@ class DAIRV2XDataModule(pl.LightningDataModule):
             shuffle=False,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
-            persistent_workers=self.num_workers > 0,
+            persistent_workers=self.num_workers,
             collate_fn=self.bevfusion_collate_fn,
         )
     

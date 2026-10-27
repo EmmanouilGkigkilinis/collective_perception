@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 import torch
 from tqdm import tqdm
 from src.models.bevfusion_model import BEVFusionV2X
@@ -141,13 +142,13 @@ def get_calib():
 
     lidar_to_camera=camera_to_lidar
 
-    camera_to_lidar = np.linalg.inv(lidar_to_camera)
+    camera2lidar = np.linalg.inv(lidar_to_camera)
 
     print("Camera intrinsic:\n", K)
     print("Camera to LiDAR:\n", camera_to_lidar)
     print("LiDAR to camera:\n", lidar_to_camera)
 
-    return K , torch.tensor(camera_to_lidar,dtype=torch.float32,)
+    return K , torch.tensor(camera2lidar,dtype=torch.float32,)
 
 if __name__=="__main__":
     class_names=["Car","Truck","Van","Bus","Pedestrian","Cyclist","Tricyclist",     "Motorcyclist","Barrowlist","Trafficcone"]
@@ -156,7 +157,7 @@ if __name__=="__main__":
 
     # mylighnting_module=BEVFusionLightningModule()
 
-    ckpt="/mnt/e/dev/hidden/projects/detection_dairv2x/checkpoints/epoch=epoch=09-val=val=0.0000-name=full_train_10.ckpt"
+    ckpt="/mnt/e/dev/hidden/projects/detection_dairv2x/checkpoints/epoch=epoch=29-val=val=0.0000-name=full_train_10.ckpt"
 
     model = BEVFusionLightningModule.load_from_checkpoint(
         ckpt,
@@ -171,9 +172,9 @@ if __name__=="__main__":
     model = model.to(device)
     model.eval()
 
-    metres_per_cell=2
-    x_min=-20
-    y_min=-20
+    metres_per_cell=1
+    x_min=-150
+    y_min=-150
 
     with torch.no_grad():
         for idx,batch in tqdm(enumerate(inference_loader())):
@@ -227,6 +228,24 @@ if __name__=="__main__":
             nms_out = nms_boxes(results)
 
             # print(f"total results bboxc output is: {nms_out['bboxes'].shape}")
+
+            # for batch_idx, result in enumerate(results):
+            #         print(f"Batch item: {batch_idx}")
+
+            #         for box, score, label in zip(
+            #             result["boxes"],
+            #             result["scores"],
+            #             result["labels"],
+            #         ):
+            #             print(
+            #                 f"class={label.item()} score={score.item():.3f} "
+            #                 f"xy={box[:2].tolist()} "
+            #                 f"lwh={box[3:6].tolist()} "
+            #                 f"yaw={box[6].item():.3f}"
+            #             )
+            #             sys.exit(0)
+                    
+
 
             labels_tot=[]
             for i, result in enumerate(nms_out):    

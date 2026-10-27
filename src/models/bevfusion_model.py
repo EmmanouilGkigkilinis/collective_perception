@@ -89,11 +89,14 @@ class BEVFusionLightningModule(pl.LightningModule):
         )
         self.val_metrics = Detection3DMetrics(**metric_kwargs)
         self.val_batch_metrics=Detection3DMetrics(**metric_kwargs)
+
         self.train_metrics = Detection3DMetrics(**metric_kwargs)
         self.test_metrics=Detection3DMetrics(**metric_kwargs)
+        self.test_batch_metrics=Detection3DMetrics(**metric_kwargs)
 
         self.train_loss_epoch = MeanMetric()
         self.val_loss_epoch = MeanMetric()
+        self.val_loss_metric=MeanMetric()
 
     def on_train_epoch_start(self):
             print(f"\nEpoch {self.current_epoch + 1}/{self.trainer.max_epochs}")
@@ -150,7 +153,6 @@ class BEVFusionLightningModule(pl.LightningModule):
         camera_intrinsics = batch["camera_intrinsics"]
         # frame_idx = batch["frame_idx"]
 
-
         start2=time.perf_counter()
         outputs = self.model(
             img=img,
@@ -196,7 +198,7 @@ class BEVFusionLightningModule(pl.LightningModule):
         size_loss, \
         rots_loss, = self.loss(outputs, targets_centerpoint)
 
-        self.train_loss_metric.update(
+        self.train_loss_epoch.update(
             final_loss.detach(),
         )
 
@@ -255,13 +257,54 @@ class BEVFusionLightningModule(pl.LightningModule):
             batch_size=self._get_batch_size(batch),
         )
 
+        outputs_perfect = []
+
+        for sample in targets_metric:
+            boxes = []
+            labels = []
+
+            for obj in sample:
+                boxes.append(torch.as_tensor(
+                    obj["bbox"], dtype=torch.float32, device=self.device
+                ))
+                labels.append(obj["type"])
+
+            outputs_perfect.append({
+                "boxes": (
+                    torch.stack(boxes)
+                    if boxes
+                    else torch.empty((0, 7), device=self.device)
+                ),
+                "labels": torch.as_tensor(
+                    labels, dtype=torch.long, device=self.device
+                ),
+                "scores": torch.ones(len(boxes), device=self.device),
+            })
+
+
         start4=time.perf_counter()
 
         #map metrics
         self.train_metrics.reset()
+
+        start_update = time.perf_counter()
         self.train_metrics.update(outputs, targets_metric)
+        start_update = time.perf_counter() - start_update
+
+        logging.info(f"Elapsed time in updating the training metrics {start_update:.3f} at epoch {self.current_epoch}")
+        print(f"Elapsed time in updating training metrics {start_update:.3f} at epoch {self.current_epoch} and batch idx {batch_idx}")
+
+
+        times_metric = time.perf_counter()
         train_metrics_values, train_metrics_values_2 = self.train_metrics.compute()
+        times_metric = time.perf_counter()-times_metric
+        logging.info(f"Elapsed time in computing the training metrics {times_metric:.3f} at epoch {self.current_epoch}")
+        print(f"Elapsed time in computing training metrics {times_metric:.3f} at epoch {self.current_epoch} and batch idx {batch_idx}")
+
+
+        times_compute_metrics = time.perf_counter()
         for name, value in train_metrics_values.items():
+            time_x = time.perf_counter()
             self.log(
                 f"train_batch_AP/{name}",
                 value,
@@ -271,17 +314,11 @@ class BEVFusionLightningModule(pl.LightningModule):
                 logger=True,
                 batch_size=self._get_batch_size(batch),
             )
-        # for name, value in train_metrics_values_2.items():
-        #     self.log(
-        #         f"train_batch/{name}",
-        #         value,
-        #         on_step=True,
-        #         on_epoch=False,
-        #         prog_bar=(name == "mAP"),
-        #         logger=True,
-        #         batch_size=self._get_batch_size(batch),
-        #     )
-        
+            time_x = time.perf_counter() - time_x
+            print(f"now doing {name} with value {value} and time {time_x}")
+        times_compute_metrics = time.perf_counter() - times_compute_metrics
+        logging.info(f"Elapsed time in plottign(self.lgo)  {times_compute_metrics:.3f} at epoch {self.current_epoch}")
+        print(f"Elapsed time in cplotting (self.log) {times_compute_metrics:.3f} at epoch {self.current_epoch} and batch idx {batch_idx}")
 
         # Release the accumulated prediction records.
         self.train_metrics.reset()
@@ -450,7 +487,7 @@ class BEVFusionLightningModule(pl.LightningModule):
         batch_metrics , batch_metrics_2 = self.val_batch_metrics.compute()
 
 
-        
+        self.val_loss_metric.update(final_loss.detach())
         
         # print(
         #     f"Validation batch {batch_idx}: "
@@ -462,6 +499,8 @@ class BEVFusionLightningModule(pl.LightningModule):
         })
 
         self.val_batch_metrics.reset()
+
+
 
 
         return outputs
@@ -479,6 +518,7 @@ class BEVFusionLightningModule(pl.LightningModule):
             f"val_3d_AP50/{name}": value
             for name, value in metrics.items()
         })
+
         epoch_loss = self.val_loss_metric.compute()
 
         if self.trainer.is_global_zero:

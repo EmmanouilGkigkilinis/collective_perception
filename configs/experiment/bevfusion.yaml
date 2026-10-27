@@ -3,7 +3,7 @@
 experiment_name: bevfusion
 batch_size: 1
 seed: 42
-modelcheckpoint_monitor: val_loss  # Must match your logged metric name
+modelcheckpoint_monitor: total_val_loss  # Must match your logged metric name
 
 trainer:
   max_epochs: 150
