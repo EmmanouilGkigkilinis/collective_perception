@@ -28,7 +28,7 @@ def viz_boxes(predictions ,
                                          x_min=x_min,
                                          y_min=y_min)
     
-    results = nms_boxes(results)
+    # results = nms_boxes(results)
     
     print("pc shape:", pc.shape)
 

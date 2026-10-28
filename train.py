@@ -91,39 +91,23 @@ def main(cfg:DictConfig):
         log_every_n_steps=1,
         enable_checkpointing=True,
         check_val_every_n_epoch=1,
-        overfit_batches=5,
-        limit_train_batches=5,  # Run 5 training batches
-        limit_val_batches=2,    # Run 2 validation batches
-        num_sanity_val_steps=0, # Skip preliminary validation
-        max_epochs=1, #for profiling
+        # overfit_batches=5,
+        # limit_train_batches=5,  # Run 5 training batches
+        # limit_val_batches=2,    # Run 2 validation batches
+        # num_sanity_val_steps=0, # Skip preliminary validation
+        max_epochs=30, 
     )
 
-    # print("Last model path:", checkpoint_callback.last_model_path)
 
-    # with open("training_logs/checkpoint_info_{}.log".format(cfg.experiment_name), "a") as f:
-    #     print("Callbacks:", file=f)
-
-    #     for cb in trainer.callbacks:
-    #         print(
-    #             type(cb),
-    #             getattr(cb, "dirpath", None),
-    #             file=f,
-    #         )
-
-    #     print("Checkpoint dir:", checkpoint_callback.dirpath, file=f)
-    #     print("Best model path:", checkpoint_callback.best_model_path, file=f)
-    #     print("Last model path:", checkpoint_callback.last_model_path, file=f) #save callbacks 
     print("Lightning version:", pl.__version__)
     print("Working directory:", Path.cwd())
     print("Active logger:", trainer.logger)
     print("TensorBoard directory:", logger.log_dir)
 
 
-
     trainer.fit(model = model , 
                 datamodule=datamodule)
     
-
 
     print("\nFinal Metrics:")
     for k, v in trainer.callback_metrics.items():
@@ -131,7 +115,5 @@ def main(cfg:DictConfig):
     print(trainer.callback_metrics)
 
     
-
-
 if __name__ == "__main__":
         main()

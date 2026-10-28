@@ -1,7 +1,6 @@
 _target_: src.models.bevfusion_model.BEVFusionLightningModule
 _recursive_: false
 
-
 in_channels: 256
 out_channels: 64
 image_size: [1080,1920]

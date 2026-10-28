@@ -21,6 +21,16 @@ def nms_boxes( results):
             for class_id in labels.unique():
                 class_indices = torch.where(labels == class_id)[0]
 
+                # Keep at most 1,000 highest-scoring candidates for this class.
+                pre_nms_topk = 1000
+
+                if class_indices.numel() > pre_nms_topk:
+                    topk_indices = scores[class_indices].topk(
+                        pre_nms_topk, sorted=False
+                    ).indices
+                    class_indices = class_indices[topk_indices]
+
+
                 # MMCV expects [center_x, center_y, local_x_size,
                 #               local_y_size, yaw].
                 bev_boxes = (

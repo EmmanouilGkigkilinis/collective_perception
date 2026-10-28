@@ -8,6 +8,7 @@ from src.utils.architecture.util_models import BEVFusionNeck,CenterPointHead
 import torch.nn as nn
 
 from os import path as osp
+# from src.utils.architecture.detector.centerpoint_head import CenterPointHead
 from src.utils.architecture.detector.centerpoint_head import CenterPointHead
 # from src.utils.warping import warp_infra_bev_to_vehicle
 from src.utils.architecture.lss.lss import LSSTransform
@@ -57,104 +58,13 @@ class BEVFusionV2X(nn.Module):
                                             dbound,
                                             downsample,
                                             )
-        self.pillars_to_bev=PillarsToBEV()  #lidar vehicle
+        self.pillars_to_bev = PillarsToBEV()  #lidar vehicle
         self.lidar_encoder = PointPillarsEncoder(in_channels=64) #lidar vehicle
         self.fusion = BEVFusionNeck() 
-        self.head = CenterPointHead(in_channels=128,num_classes=num_classes)  # or TransFusion/Anchor3DHead
-        # self.head = CenterPointHead
-        # self.x_bound=x_bound
-        # self.y_bound=y_bound
-
-        
-
-        # sys.exit()
-
-        # print("Input device:", bev_features.device)
-        # self.img_aug_matrix = torch.eye(
-        #         4,
-        #         dtype=torch.float32,
-        #     )
-        # self.lidar_aug_matrix = torch.eye(
-        #         4,
-        #         dtype=torch.float32,
-        # )
-
-
-
-
-    # def read_calib_path(self , path:str):
-    #     """
-    #     Read calibration for one timestamp/frame.
-
-    #     Returns
-    #     -------
-    #     camera_intrinsics : [1, 4, 4]
-    #         Camera intrinsic matrix. First dimension is N=1 camera.
-
-    #     camera2lidar : [1, 4, 4]
-    #         Transform from vehicle camera frame -> vehicle LiDAR frame.
-
-    #     lidar2camera : [1, 4, 4]
-    #         Transform from vehicle LiDAR frame -> vehicle camera frame.
-
-    #     cam_D : [num_distortion_coeffs]
-    #         Distortion coefficients.
-    #     """
-    #     camera_intrinsics_list=[]
-    #     camera2lidar_list=[]
-
-    #     for frame_idx in path:
-
-    #         with open(osp.join(self.calib_path,"camera_intrinsic",frame_idx + ".json") , "r") as f:
-    #             calib = json.load(f) 
-    #         camera_intinsics = calib["cam_K"]
-    #         camera_intrinsics_list.append(camera_intinsics)
-
-    #         K = torch.tensor(
-    #             camera_intinsics,
-    #             dtype=torch.float32,
-    #         ).reshape(3, 3)
-    #         # BEVFusion uses homogeneous 4x4 calibration matrices
-    #         K4 = torch.eye(4, dtype=torch.float32)
-    #         K4[:3, :3] = K
-
-    #         # N = 1 camera
-    #         camera_intrinsics = K4.unsqueeze(0)
-    #         # [1,4,4]
-
-
-    #         with open(osp.join(self.calib_path , "lidar_to_camera", frame_idx + ".json") , "r") as f:
-    #             calib_ext=json.load(f)
-
-    #         R_lidar_to_camera = torch.tensor(
-    #             calib_ext["rotation"],
-    #             dtype=torch.float32,
-    #         ).reshape(3, 3)
-
-    #         t_lidar_to_camera = torch.tensor(
-    #             calib_ext["translation"],
-    #             dtype=torch.float32,
-    #         ).reshape(3)
-    #         lidar2camera = torch.eye(
-    #             4,
-    #             dtype=torch.float32,
-    #         )
-
-    #         lidar2camera[:3, :3] = R_lidar_to_camera
-    #         lidar2camera[:3, 3] = t_lidar_to_camera
-
-
-    #         # camera2lidar=[calib["rotation"] , calib["translation"]]
-    #         camera2lidar = torch.linalg.inv(
-    #             lidar2camera
-    #         )
-
-    #         # Add N=1 camera dimension
-    #         lidar2camera = lidar2camera.unsqueeze(0)
-    #         camera2lidar = camera2lidar.unsqueeze(0)
-
-
-    #     return camera2lidar_list , camera_intrinsics_list
+        self.head = CenterPointHead(in_channels=128,
+                                    num_classes=num_classes)  # or TransFusion/Anchor3DHead
+       
+        self.lidar_rsu_transformation = warp_rsu()
 
     def forward(self, 
                 img, 
@@ -249,41 +159,5 @@ class BEVFusionV2X(nn.Module):
 
         return pred
     
-
-class V2XBEVFusion(nn.Module):
-    def __init__(self, num_classes=3, bev_h=200, bev_w=200):
-        super().__init__()
-
-        self.camera_encoder = LSSCameraEncoder(
-            in_channels=3,
-            bev_channels=64,
-            bev_h=bev_h,
-            bev_w=bev_w,
-        )
-
-        self.lidar_encoder = PointPillarsEncoder(
-            in_channels=9,
-            bev_channels=64,
-        )
-
-        self.fusion = BEVFusionNeck(
-            cam_channels=64,
-            lidar_channels=64,
-            out_channels=128,
-        )
-
-        self.head = CenterPointHead(
-            in_channels=128,
-            num_classes=num_classes,
-        )
-
-    def forward(self, vehicle_img, infra_lidar_pseudo_img):
-        cam_bev = self.camera_encoder(vehicle_img)
-        lidar_bev = self.lidar_encoder(infra_lidar_pseudo_img)
-
-        fused_bev = self.fusion(cam_bev, lidar_bev)
-
-        preds = self.head(fused_bev)
-
-        return preds
+    
 

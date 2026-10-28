@@ -87,16 +87,19 @@ class BEVFusionLightningModule(pl.LightningModule):
             thresh_iou=0.5,                   # Minimum 3D IoU for a correct match.
             num_classes=num_classes,     # Number of heatmap classes.
         )
-        self.val_metrics = Detection3DMetrics(**metric_kwargs)
-        self.val_batch_metrics=Detection3DMetrics(**metric_kwargs)
+        self.val_metrics = Detection3DMetrics(**metric_kwargs)                  #epoch val AP
+        self.val_batch_metrics=Detection3DMetrics(**metric_kwargs)              #batch val AP 
 
-        self.train_metrics = Detection3DMetrics(**metric_kwargs)
+        self.train_metrics = Detection3DMetrics(**metric_kwargs)            #batch train AP 
+        self.train_epoch_metrics = Detection3DMetrics(**metric_kwargs)      #epoch train AP
         self.test_metrics=Detection3DMetrics(**metric_kwargs)
         self.test_batch_metrics=Detection3DMetrics(**metric_kwargs)
 
-        self.train_loss_epoch = MeanMetric()
-        self.val_loss_epoch = MeanMetric()
+        self.train_loss_epoch = MeanMetric()                                #train loss epoch 
+        self.val_loss_epoch = MeanMetric()                                  #val loss epoch
         self.val_loss_metric=MeanMetric()
+
+
 
     def on_train_epoch_start(self):
             print(f"\nEpoch {self.current_epoch + 1}/{self.trainer.max_epochs}")
@@ -114,8 +117,32 @@ class BEVFusionLightningModule(pl.LightningModule):
                 global_step=self.current_epoch + 1,
             )
 
+
+        metrics,_ = self.train_epoch_metrics.compute()
+
+        # "AP50" assumes thresh_iou=0.5; change the name for other thresholds.
+        self.log_dict({
+            f"train_epoch_AP50/{name}": value
+            for name, value in metrics.items()
+        })
+
+        self.train_epoch_metrics.reset()
+
         self.train_loss_epoch.reset()
 
+        optimizer = self.optimizers()
+        current_lr = optimizer.param_groups[0]["lr"]
+
+        self.log(
+            "lr",
+            current_lr,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+        )
+
+        
   
     def training_step(self, batch, batch_idx):
         """
@@ -287,24 +314,13 @@ class BEVFusionLightningModule(pl.LightningModule):
         #map metrics
         self.train_metrics.reset()
 
-        start_update = time.perf_counter()
+     
         self.train_metrics.update(outputs, targets_metric)
-        start_update = time.perf_counter() - start_update
+        
 
-        logging.info(f"Elapsed time in updating the training metrics {start_update:.3f} at epoch {self.current_epoch}")
-        print(f"Elapsed time in updating training metrics {start_update:.3f} at epoch {self.current_epoch} and batch idx {batch_idx}")
-
-
-        times_metric = time.perf_counter()
         train_metrics_values, train_metrics_values_2 = self.train_metrics.compute()
-        times_metric = time.perf_counter()-times_metric
-        logging.info(f"Elapsed time in computing the training metrics {times_metric:.3f} at epoch {self.current_epoch}")
-        print(f"Elapsed time in computing training metrics {times_metric:.3f} at epoch {self.current_epoch} and batch idx {batch_idx}")
-
-
-        times_compute_metrics = time.perf_counter()
+    
         for name, value in train_metrics_values.items():
-            time_x = time.perf_counter()
             self.log(
                 f"train_batch_AP/{name}",
                 value,
@@ -314,23 +330,12 @@ class BEVFusionLightningModule(pl.LightningModule):
                 logger=True,
                 batch_size=self._get_batch_size(batch),
             )
-            time_x = time.perf_counter() - time_x
-            print(f"now doing {name} with value {value} and time {time_x}")
-        times_compute_metrics = time.perf_counter() - times_compute_metrics
-        logging.info(f"Elapsed time in plottign(self.lgo)  {times_compute_metrics:.3f} at epoch {self.current_epoch}")
-        print(f"Elapsed time in cplotting (self.log) {times_compute_metrics:.3f} at epoch {self.current_epoch} and batch idx {batch_idx}")
+        
+           
+        self.train_epoch_metrics.update(outputs , targets_metric)  #epoch values 
 
         # Release the accumulated prediction records.
         self.train_metrics.reset()
-        elapsed4 = time.perf_counter() - start4
-        logging.info(f"Elapsed time in logging  training step {elapsed4:.3f} at epoch {self.current_epoch}")
-        print(f"Elapsed time in logging training step {elapsed4:.3f} at epoch {self.current_epoch} and batch idx {batch_idx}")
-
-
-        elapsed = time.perf_counter() - start
-
-        logging.info(f"Elapsed time in forward call of training step {elapsed:.3f} at epoch {self.current_epoch}")
-        print(f"Elapsed time in forward call training step {elapsed:.3f} at epoch {self.current_epoch} and batch idx {batch_idx}")
 
         return final_loss
 
@@ -387,9 +392,7 @@ class BEVFusionLightningModule(pl.LightningModule):
             final_loss.detach(),
         )
 
-
         self.val_metrics.update(outputs, targets)
-
 
         self.log(
             "total_val_loss",
@@ -534,6 +537,7 @@ class BEVFusionLightningModule(pl.LightningModule):
         self.val_metrics.reset()
 
     def training_epoch_end(self, outputs):
+
         print(f"\nEpoch {self.current_epoch} train metrics:")
         for k, v in self.trainer.callback_metrics.items():
             if "train" in k:

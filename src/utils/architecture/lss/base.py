@@ -27,8 +27,6 @@ def gen_dx_bx(xbound, ybound, zbound):
 
 
 
-
-
 class BaseTransform(nn.Module):
     def __init__(
         self,
@@ -180,7 +178,7 @@ class BaseTransform(nn.Module):
 
         # collapse Z
         final = torch.cat(x.unbind(dim=2), 1)
-
+        final = final.transpose(-2, -1).contiguous()  # [B,C,y,x]  
         return final
 
     # @force_fp32()

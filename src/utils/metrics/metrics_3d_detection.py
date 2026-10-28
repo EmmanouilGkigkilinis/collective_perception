@@ -1,3 +1,4 @@
+import time
 import torch
 from torchmetrics import Metric
 from src.utils.centerpoint_utils import get_decoded_bbox_from_pred, nms_boxes
@@ -70,6 +71,9 @@ class Detection3DMetrics(Metric):
             dist_reduce_fx="sum",
         )
 
+
+        self.class_names=["Car","Truck","Van","Bus","Pedestrian","Cyclist","Tricyclist", "Motorcyclist","Barrowlist","Trafficcone"]
+
     @torch.no_grad()  # Metrics do not need gradient tracking.
     def update(self, predictions, targets):
         """
@@ -101,7 +105,12 @@ class Detection3DMetrics(Metric):
         # IMPORTANT:
                 # Rotated BEV NMS, independently per sample and class.
         # Separate from self.thresh_iou, which controls GT matching.
+
+
+        nms_timer= time.perf_counter()
         results_postprocessed = nms_boxes(results=results)
+        time_elapsed = time.perf_counter() - nms_timer
+        logging.info(f"Elapsed {time_elapsed} time inside nms processing ")
         # Without NMS, duplicate predictions are evaluated as extra detections
         # and can become false positives.
 
@@ -237,10 +246,11 @@ class Detection3DMetrics(Metric):
 
         for c in range(self.num_classes):
 
+            name=self.class_names[c]
             # AP is undefined when the evaluation set has no GT of this class.
             # Report NaN and exclude this class from the mAP calculation.
             if self.num_gt[c] == 0:
-                metrics[f"AP_class_{c}"] = records.new_tensor(
+                metrics[f"AP_class_{name}"] = records.new_tensor(
                     float("nan")
                 )
                 continue
@@ -255,7 +265,7 @@ class Detection3DMetrics(Metric):
             # Running TP and FP counts as we include lower-scoring predictions.
             # Example TP flags: [1, 0, 1] -> cumulative TP: [1, 1, 2].
             cumulative_tp = rows[:, 1].cumsum(dim=0)
-            metrics[f"TP_class_{c}"] = (
+            metrics[f"TP_class_{name}"] = (
                 cumulative_tp[-1]
                 if cumulative_tp.numel() > 0
                 else self.num_gt.new_tensor(0).float()
@@ -299,7 +309,7 @@ class Detection3DMetrics(Metric):
             ).sum()
 
             # Save this class's AP and include it in the class average.
-            metrics[f"AP_class_{c}"] = ap
+            metrics[f"AP_class_{name}"] = ap
             class_aps.append(ap)
 
             # class_precisions.append(precision)
