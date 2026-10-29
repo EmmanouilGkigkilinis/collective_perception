@@ -39,8 +39,8 @@ class BEVFusionLightningModule(pl.LightningModule):
         score_threshold,
         thresh_iou,
         epoch_viz_step,
-        lr=1e-4,
-        weight_decay=1e-4,
+        lr,
+        weight_decay,
     ):
         super().__init__()
 
@@ -647,7 +647,6 @@ class BEVFusionLightningModule(pl.LightningModule):
             return_loss=False,
         )
 
-
     def configure_optimizers(self):
 
         optimizer = torch.optim.AdamW(
@@ -656,10 +655,16 @@ class BEVFusionLightningModule(pl.LightningModule):
             weight_decay=self.weight_decay,
         )
 
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer,
-            T_max=self.trainer.max_epochs,
-        )
+        # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        #     optimizer,
+        #     T_max=self.trainer.max_epochs,
+        # )
+
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(
+                optimizer,
+                milestones=[15, 25],
+                gamma=0.1,
+            )
 
         return {
             "optimizer": optimizer,

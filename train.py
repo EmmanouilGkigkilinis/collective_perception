@@ -91,11 +91,11 @@ def main(cfg:DictConfig):
         log_every_n_steps=1,
         enable_checkpointing=True,
         check_val_every_n_epoch=1,
-        overfit_batches=5,
-        limit_train_batches=5,  # Run 5 training batches
-        limit_val_batches=2,    # Run 2 validation batches
-        num_sanity_val_steps=0, # Skip preliminary validation
-        max_epochs=1, #for profiling
+        # overfit_batches=5,
+        # limit_train_batches=5,  # Run 5 training batches
+        # limit_val_batches=2,    # Run 2 validation batches
+        # num_sanity_val_steps=0, # Skip preliminary validation
+        max_epochs=30, #for profiling
     )
 
     # print("Last model path:", checkpoint_callback.last_model_path)
