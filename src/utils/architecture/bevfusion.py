@@ -14,6 +14,7 @@ from src.utils.architecture.detector.centerpoint_head import CenterPointHead
 from src.utils.architecture.lss.lss import LSSTransform
 from src.utils.architecture.cam_feat_extraction.model_builder import mmdet3d_model_builder
 from src.utils.architecture.pointpillars.pointpillars_utils import PillarsToBEV
+from src.utils.warping import warp_infra_bev_to_vehicle
 
 logger= logging.getLogger(__file__)
 
@@ -39,8 +40,11 @@ class BEVFusionV2X(nn.Module):
                 calib_path,
                 device,
                 num_classes,
+                rsu2veh,
                 pipe=None ):
         super().__init__()
+
+
         self.calib_path = calib_path
         # self.camera_encoder = LSSCameraEncoder(bev_h,bev_w)
         # self.camera_feature_extractor = CameraFeaturizer()
@@ -143,13 +147,15 @@ class BEVFusionV2X(nn.Module):
         # Spatial alignment
         # ----------------------------------------
 
-        # infra_bev_aligned = warp_infra_bev_to_vehicle(
-        #     infra_bev=infra_bev,
-        #     R_inf_to_veh=R,
-        #     t_inf_to_veh=t,
-        #     xbound=self.xbound,
-        #     ybound=self.ybound,
-        # )
+        R_inf_to_veh , t_inf_to_veh = decouple(rsu2veh)  #implemnet
+
+        infra_bev_aligned = warp_infra_bev_to_vehicle(
+            infra_bev=infra_bev,
+            R_inf_to_veh=R_inf_to_veh,
+            t_inf_to_veh=t_inf_to_veh,
+            xbound=self.xbound,
+            ybound=self.ybound,
+        )
 
         # lidar_bev = warp_infra_bev_to_vehicle(lidar_bev, trans)
 

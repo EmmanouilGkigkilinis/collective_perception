@@ -39,8 +39,8 @@ class BEVFusionLightningModule(pl.LightningModule):
         score_threshold,
         thresh_iou,
         epoch_viz_step,
-        lr=1e-4,
-        weight_decay=1e-4,
+        lr,
+        weight_decay=1e-5,
     ):
         super().__init__()
 
@@ -97,7 +97,7 @@ class BEVFusionLightningModule(pl.LightningModule):
 
         self.train_loss_epoch = MeanMetric()                                #train loss epoch 
         self.val_loss_epoch = MeanMetric()                                  #val loss epoch
-        self.val_loss_metric=MeanMetric()
+        self.val_loss_metric = MeanMetric()
 
 
 
@@ -116,7 +116,6 @@ class BEVFusionLightningModule(pl.LightningModule):
                 train_metric.item(),
                 global_step=self.current_epoch + 1,
             )
-
 
         metrics,_ = self.train_epoch_metrics.compute()
 
@@ -660,11 +659,16 @@ class BEVFusionLightningModule(pl.LightningModule):
             weight_decay=self.weight_decay,
         )
 
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer,
-            T_max=self.trainer.max_epochs,
-        )
+        # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        #     optimizer,
+        #     T_max=self.trainer.max_epochs,
+        # )
 
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(
+            optimizer,
+            milestones=[15, 25],
+            gamma=0.1,
+        )
         return {
             "optimizer": optimizer,
             "lr_scheduler": {

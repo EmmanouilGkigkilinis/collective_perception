@@ -37,6 +37,8 @@ class DAIRV2X_DATASET(Dataset):
                  path_to_data_info:str,
                  path_to_gt_labels:str,
                  path_to_veh_calib:str,
+                 data_path_coop:str,
+                 data_path_rsu:str , 
                  test_k_elem:int,
                  test_k:bool,
                  class_names
@@ -56,9 +58,11 @@ class DAIRV2X_DATASET(Dataset):
         self.path_to_gt_labels = Path(path_to_gt_labels)
         self.path_to_veh_calib = path_to_veh_calib
 
+        self.path_to_inf_calib = Path(data_path_rsu)
         #--- inputs
         self.data_path_veh_cam = Path(data_path_veh_cam) #data paths 
         self.data_path_veh_lid = Path(data_path_veh_lid)
+        self.data_path_to_coop= Path(data_path_coop)
 
         #conf
         self.test_k_elem=test_k_elem
@@ -76,7 +80,21 @@ class DAIRV2X_DATASET(Dataset):
         self.camera2ego,\
         self.lidar2ego,\
         self.img_aug_matrix,\
-        self.lidar_aug_matrix=self.read_calib_files_once(frame_idx="000000")
+        self.lidar_aug_matrix,\
+        self.lidar2novatel , \
+        self.novatel2world =self.read_calib_files_vehicle(frame_idx="000000")
+
+        #calib(infra)
+        self.camera_intrinsics_rsu,\
+        self.camera2lidar_rsu,\
+        self.camera2ego_rsu,\
+        self.lidar2ego_rsu,\
+        self.img_aug_matrix_rsu,\
+        self.lidar_aug_matrix_rsu, \
+        self.lidar_to_world = self.read_calib_files_rsu(frame_idx = "000000")
+        
+        #calib(world)
+
 
 
         self.print_stats=True
@@ -102,10 +120,10 @@ class DAIRV2X_DATASET(Dataset):
     def __len__(self):
         return len(self.database)
     
-    def read_calib_files_once(self,frame_idx):
+    def read_calib_files_vehicle(self, frame_idx):
         """
-        Read calibration for one timestamp/frame. Assuming 
-        that these calibration files for the vehicle frame (intrinsics and extrinsics with relation to lidar etc remain constant which is true)
+        Read calibration for one timestamp/frame for the vehiccle sensors. Assuming 
+        that these calibration files for vehicle (intrinsics and extrinsics with relation to lidar etc remain constant which is true)
 
         Returns
         -------
@@ -180,12 +198,161 @@ class DAIRV2X_DATASET(Dataset):
                 dtype=torch.float32,
         )
 
+        #lidar2novatel
+        with open(osp.join(self.path_to_veh_calib , "lidar_to_novatel", frame_idx + ".json") , "r") as f:
+            calib_ext=json.load(f)
+
+        R_lidar_to_novatel = torch.tensor(
+            calib_ext["rotation"],
+            dtype=torch.float32,
+        ).reshape(3, 3)
+
+        t_lidar_to_novatel = torch.tensor(
+            calib_ext["translation"],
+            dtype=torch.float32,
+        ).reshape(3)
+
+        lidar2novatel = torch.eye(4, dtype=torch.float32)
+        lidar2novatel[:3, :3] = R_lidar_to_novatel
+        lidar2novatel[:3, 3] = t_lidar_to_novatel
+
+        lidar2novatel.unsqueeze_(0)
+
+
+        #novatel to world
+        with open(osp.join(self.path_to_veh_calib,"novatel_to_world"), "r") as f:
+            calib = json.load(f)
+
+        R = torch.tensor(calib["rotation"], dtype=torch.float32)
+        t = torch.tensor(calib["translation"], dtype=torch.float32).reshape(3)
+
+        error = calib.get("relative_error", {})
+        dx = float(error.get("delta_x", 0) or 0)
+        dy = float(error.get("delta_y", 0) or 0)
+
+        t = t + torch.tensor([dx, dy, 0.0], dtype=t.dtype)
+
+        novatel2world = torch.eye(4, dtype=torch.float32)
+        novatel2world[:3, :3] = R
+        novatel2world[:3, 3] = t
+
+        novatel2world.unsqueeze_(0)
+
+
+
         return (camera_intrinsics,
                 camera2lidar, 
                 camera2ego, 
                 lidar2ego , 
                 img_aug_matrix,
-                lidar_aug_matrix)
+                lidar_aug_matrix , lidar2novatel, novatel2world)
+    
+    def read_calib_files_rsu(self,frame_idx):
+        """
+        Read calibration for one timestamp/frame for the rsu sensors. Assuming 
+        that these calibration files for the rsu frame (intrinsics and extrinsics with relation to lidar etc remain constant which is true)
+
+        Returns
+        -------
+        camera_intrinsics : [1, 4, 4]
+            Camera intrinsic matrix. First dimension is N=1 camera.
+
+        camera2lidar : [1, 4, 4]
+            Transform from vehicle camera frame -> vehicle LiDAR frame.
+
+        lidar2camera : [1, 4, 4]
+            Transform from vehicle LiDAR frame -> vehicle camera frame.
+
+        cam_D : [num_distortion_coeffs]
+            Distortion coefficients.
+        """
+        
+
+        with open(osp.join(self.path_to_inf_calib,"camera_intrinsic",frame_idx + ".json") , "r") as f:
+            calib = json.load(f) 
+        camera_intinsics = calib["cam_K"]
+
+        K = torch.tensor(
+            camera_intinsics,
+            dtype=torch.float32,
+        ).reshape(3, 3)
+
+        # BEVFusion uses homogeneous 4x4 calibration matrices
+        K4 = torch.eye(4, dtype=torch.float32)
+        K4[:3, :3] = K
+
+        # N = 1 camera
+        camera_intrinsics = K4.unsqueeze(0)
+        # [1,4,4]
+
+        with open(osp.join(self.path_to_inf_calib , "virtuallidar_to_camera", frame_idx + ".json") , "r") as f:
+            calib_ext=json.load(f)
+
+        R_lidar_to_camera = torch.tensor(
+            calib_ext["rotation"],
+            dtype=torch.float32,
+        ).reshape(3, 3)
+
+        t_lidar_to_camera = torch.tensor(
+            calib_ext["translation"],
+            dtype=torch.float32,
+        ).reshape(3)
+        lidar2camera = torch.eye(
+            4,
+            dtype=torch.float32,
+        )
+
+        lidar2camera[:3, :3] = R_lidar_to_camera
+        lidar2camera[:3, 3] = t_lidar_to_camera
+
+        # camera2lidar=[calib["rotation"] , calib["translation"]]
+        camera2lidar = torch.linalg.inv(
+            lidar2camera
+        )
+
+        # Add N=1 camera dimension
+        lidar2camera = lidar2camera.unsqueeze(0)
+        camera2lidar = camera2lidar.unsqueeze(0)
+
+        camera2ego=camera2lidar.clone()
+        lidar2ego=torch.eye(4)
+        img_aug_matrix = torch.eye(
+                4,
+                dtype=torch.float32,
+            )
+        lidar_aug_matrix = torch.eye(
+                4,
+                dtype=torch.float32,
+        )
+
+        #novatel
+        with open(osp.join(self.path_to_inf_calib,"virtuallidar_to_world"), "r") as f:
+            calib = json.load(f)
+
+        R = torch.tensor(calib["rotation"], dtype=torch.float32)
+        t = torch.tensor(calib["translation"], dtype=torch.float32).reshape(3)
+
+        error = calib.get("relative_error", {})
+        dx = float(error.get("delta_x", 0) or 0)
+        dy = float(error.get("delta_y", 0) or 0)
+
+        t = t + torch.tensor([dx, dy, 0.0], dtype=t.dtype)
+
+        lidar2world = torch.eye(4, dtype=torch.float32)
+        lidar2world[:3, :3] = R
+        lidar2world[:3, 3] = t
+
+        lidar2world.unsqueeze_(0)
+
+
+        return (camera_intrinsics,
+                camera2lidar, 
+                camera2ego, 
+                lidar2ego , 
+                img_aug_matrix,
+                lidar_aug_matrix,
+                
+                )
     
     def __getitem__(self, idx):
         """
@@ -276,7 +443,7 @@ class DAIRV2X_DATASET(Dataset):
             calib = json.load(f) 
         camera_intinsics = calib["cam_K"]
 
-        K = torch.tensor(
+        K = torch.tensor( 
             camera_intinsics,
             dtype=torch.float32,
         ).reshape(3, 3)
@@ -443,6 +610,7 @@ class DAIRV2XDataModule(pl.LightningDataModule):
         path_to_gt_labels:str,
         path_to_data_splits:str,
         path_to_veh_calib:str,
+        data_path_rsu:str,
         test_k_elem:int,
         test_k:bool,
         class_names,
@@ -457,7 +625,6 @@ class DAIRV2XDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
         self.pin_memory = pin_memory
 
-
         self.train_dataset = None
         self.val_dataset = None
         self.test_dataset = None
@@ -469,6 +636,8 @@ class DAIRV2XDataModule(pl.LightningDataModule):
         self.path_to_gt_labels=path_to_gt_labels    #gt info
         self.path_to_data_splits=path_to_data_splits #train-val-test splits info
         self.path_to_veh_calib= path_to_veh_calib
+        self.path_to_rsu_data = data_path_rsu
+
         #splitting
         self.train_splits,self.val_splits,self.test_splits = self.parse_data_splits(self.path_to_data_splits) #get splits
 

@@ -95,7 +95,7 @@ def main(cfg:DictConfig):
         # limit_train_batches=5,  # Run 5 training batches
         # limit_val_batches=2,    # Run 2 validation batches
         # num_sanity_val_steps=0, # Skip preliminary validation
-        max_epochs=30, 
+        max_epochs=cfg.trainer.max_epochs, 
     )
 
 
