@@ -40,7 +40,7 @@ class BEVFusionV2X(nn.Module):
                 calib_path,
                 device,
                 num_classes,
-                rsu2veh,
+                # rsu2veh,
                 pipe=None ):
         super().__init__()
 
@@ -68,7 +68,7 @@ class BEVFusionV2X(nn.Module):
         self.head = CenterPointHead(in_channels=128,
                                     num_classes=num_classes)  # or TransFusion/Anchor3DHead
        
-        self.lidar_rsu_transformation = warp_rsu()
+        # self.lidar_rsu_transformation = warp_rsu()
 
     def forward(self, 
                 img, 
@@ -147,15 +147,15 @@ class BEVFusionV2X(nn.Module):
         # Spatial alignment
         # ----------------------------------------
 
-        R_inf_to_veh , t_inf_to_veh = decouple(rsu2veh)  #implemnet
+        # R_inf_to_veh , t_inf_to_veh = decouple(rsu2veh)  #implemnet
 
-        infra_bev_aligned = warp_infra_bev_to_vehicle(
-            infra_bev=infra_bev,
-            R_inf_to_veh=R_inf_to_veh,
-            t_inf_to_veh=t_inf_to_veh,
-            xbound=self.xbound,
-            ybound=self.ybound,
-        )
+        # infra_bev_aligned = warp_infra_bev_to_vehicle(
+        #     infra_bev=infra_bev,
+        #     R_inf_to_veh=R_inf_to_veh,
+        #     t_inf_to_veh=t_inf_to_veh,
+        #     xbound=self.xbound,
+        #     ybound=self.ybound,
+        # )
 
         # lidar_bev = warp_infra_bev_to_vehicle(lidar_bev, trans)
 

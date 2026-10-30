@@ -40,7 +40,7 @@ class BEVFusionLightningModule(pl.LightningModule):
         thresh_iou,
         epoch_viz_step,
         lr,
-        weight_decay=1e-5,
+        weight_decay,
     ):
         super().__init__()
 

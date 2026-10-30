@@ -81,17 +81,20 @@ class DAIRV2X_DATASET(Dataset):
         self.lidar2ego,\
         self.img_aug_matrix,\
         self.lidar_aug_matrix,\
-        self.lidar2novatel , \
-        self.novatel2world =self.read_calib_files_vehicle(frame_idx="000000")
+        =self.read_calib_files_vehicle(frame_idx="000000")
+        
+        # self.lidar2novatel , \
+        # self.novatel2world 
 
-        #calib(infra)
-        self.camera_intrinsics_rsu,\
-        self.camera2lidar_rsu,\
-        self.camera2ego_rsu,\
-        self.lidar2ego_rsu,\
-        self.img_aug_matrix_rsu,\
-        self.lidar_aug_matrix_rsu, \
-        self.lidar_to_world = self.read_calib_files_rsu(frame_idx = "000000")
+
+        # #calib(infra)
+        # self.camera_intrinsics_rsu,\
+        # self.camera2lidar_rsu,\
+        # self.camera2ego_rsu,\
+        # self.lidar2ego_rsu,\
+        # self.img_aug_matrix_rsu,\
+        # self.lidar_aug_matrix_rsu, \
+        # self.lidar_to_world = self.read_calib_files_rsu(frame_idx = "000000")
         
         #calib(world)
 
@@ -198,45 +201,45 @@ class DAIRV2X_DATASET(Dataset):
                 dtype=torch.float32,
         )
 
-        #lidar2novatel
-        with open(osp.join(self.path_to_veh_calib , "lidar_to_novatel", frame_idx + ".json") , "r") as f:
-            calib_ext=json.load(f)
+        # #lidar2novatel
+        # with open(osp.join(self.path_to_veh_calib , "lidar_to_novatel", frame_idx + ".json") , "r") as f:
+        #     calib_ext=json.load(f)
 
-        R_lidar_to_novatel = torch.tensor(
-            calib_ext["rotation"],
-            dtype=torch.float32,
-        ).reshape(3, 3)
+        # R_lidar_to_novatel = torch.tensor(
+        #     calib_ext["rotation"],
+        #     dtype=torch.float32,
+        # ).reshape(3, 3)
 
-        t_lidar_to_novatel = torch.tensor(
-            calib_ext["translation"],
-            dtype=torch.float32,
-        ).reshape(3)
+        # t_lidar_to_novatel = torch.tensor(
+        #     calib_ext["translation"],
+        #     dtype=torch.float32,
+        # ).reshape(3)
 
-        lidar2novatel = torch.eye(4, dtype=torch.float32)
-        lidar2novatel[:3, :3] = R_lidar_to_novatel
-        lidar2novatel[:3, 3] = t_lidar_to_novatel
+        # lidar2novatel = torch.eye(4, dtype=torch.float32)
+        # lidar2novatel[:3, :3] = R_lidar_to_novatel
+        # lidar2novatel[:3, 3] = t_lidar_to_novatel
 
-        lidar2novatel.unsqueeze_(0)
+        # lidar2novatel.unsqueeze_(0)
 
 
-        #novatel to world
-        with open(osp.join(self.path_to_veh_calib,"novatel_to_world"), "r") as f:
-            calib = json.load(f)
+        # #novatel to world
+        # with open(osp.join(self.path_to_veh_calib,"novatel_to_world"), "r") as f:
+        #     calib = json.load(f)
 
-        R = torch.tensor(calib["rotation"], dtype=torch.float32)
-        t = torch.tensor(calib["translation"], dtype=torch.float32).reshape(3)
+        # R = torch.tensor(calib["rotation"], dtype=torch.float32)
+        # t = torch.tensor(calib["translation"], dtype=torch.float32).reshape(3)
 
-        error = calib.get("relative_error", {})
-        dx = float(error.get("delta_x", 0) or 0)
-        dy = float(error.get("delta_y", 0) or 0)
+        # error = calib.get("relative_error", {})
+        # dx = float(error.get("delta_x", 0) or 0)
+        # dy = float(error.get("delta_y", 0) or 0)
 
-        t = t + torch.tensor([dx, dy, 0.0], dtype=t.dtype)
+        # t = t + torch.tensor([dx, dy, 0.0], dtype=t.dtype)
 
-        novatel2world = torch.eye(4, dtype=torch.float32)
-        novatel2world[:3, :3] = R
-        novatel2world[:3, 3] = t
+        # novatel2world = torch.eye(4, dtype=torch.float32)
+        # novatel2world[:3, :3] = R
+        # novatel2world[:3, 3] = t
 
-        novatel2world.unsqueeze_(0)
+        # novatel2world.unsqueeze_(0)
 
 
 
@@ -245,7 +248,10 @@ class DAIRV2X_DATASET(Dataset):
                 camera2ego, 
                 lidar2ego , 
                 img_aug_matrix,
-                lidar_aug_matrix , lidar2novatel, novatel2world)
+                lidar_aug_matrix ,
+        ) 
+                # lidar2novatel, 
+                # novatel2world)
     
     def read_calib_files_rsu(self,frame_idx):
         """
@@ -610,6 +616,7 @@ class DAIRV2XDataModule(pl.LightningDataModule):
         path_to_gt_labels:str,
         path_to_data_splits:str,
         path_to_veh_calib:str,
+        data_path_coop:str, 
         data_path_rsu:str,
         test_k_elem:int,
         test_k:bool,
@@ -637,10 +644,11 @@ class DAIRV2XDataModule(pl.LightningDataModule):
         self.path_to_data_splits=path_to_data_splits #train-val-test splits info
         self.path_to_veh_calib= path_to_veh_calib
         self.path_to_rsu_data = data_path_rsu
+        self.data_path_coop = data_path_coop
+        self.data_path_rsu = data_path_rsu
 
         #splitting
         self.train_splits,self.val_splits,self.test_splits = self.parse_data_splits(self.path_to_data_splits) #get splits
-
 
         #conf
         self.test_k_elem=test_k_elem
@@ -677,6 +685,8 @@ class DAIRV2XDataModule(pl.LightningDataModule):
                 path_to_data_info=self.path_to_data_info,
                 path_to_gt_labels=self.path_to_gt_labels,
                 path_to_veh_calib=self.path_to_veh_calib,
+                data_path_coop=self.data_path_coop,
+                data_path_rsu=self.data_path_rsu,
                 desc="train",
                 test_k_elem=self.test_k_elem,
                 test_k=self.test_k,
@@ -690,6 +700,8 @@ class DAIRV2XDataModule(pl.LightningDataModule):
                 path_to_data_info=self.path_to_data_info,
                 path_to_gt_labels=self.path_to_gt_labels,
                 path_to_veh_calib=self.path_to_veh_calib,
+                data_path_rsu=self.data_path_rsu,
+                data_path_coop=self.data_path_coop,
                 desc="val",
                 test_k_elem=self.test_k_elem,
                 test_k=self.test_k,
@@ -704,7 +716,9 @@ class DAIRV2XDataModule(pl.LightningDataModule):
                 data_path_veh_lid=self.data_path_veh_lid,
                 path_to_data_info=self.path_to_data_info,
                 path_to_gt_labels=self.path_to_gt_labels,
+                data_path_rsu=self.data_path_rsu,
                 path_to_veh_calib=self.path_to_veh_calib,
+                data_path_coop=self.data_path_coop,
                 desc="test",
                 test_k_elem=self.test_k_elem,
                 test_k=self.test_k,

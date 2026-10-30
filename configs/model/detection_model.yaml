@@ -4,6 +4,7 @@ _recursive_: false
 in_channels: 256
 out_channels: 64
 lr: 0.001
+weight_decay: 0
 image_size: [1080,1920]
 feature_size: [135,240]
 

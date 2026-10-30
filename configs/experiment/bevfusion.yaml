@@ -6,7 +6,7 @@ seed: 42
 modelcheckpoint_monitor: total_val_loss  # Must match your logged metric name
 
 trainer:
-  max_epochs: 40
+  max_epochs: 30
 
 model:
   score_threshold: 0.1
